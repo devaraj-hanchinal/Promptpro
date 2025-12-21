@@ -1,14 +1,23 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
-
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(req: Request) {
   try {
-    const { prompt, model, style } = await req.json();
+    // Get the key from Vercel environment variables
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'Gemini API key is not configured' }, 
+        { status: 500 }
+      );
+    }
+
+    // Initialize Google Gemini
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+
+    const { prompt, style } = await req.json();
 
     if (!prompt) {
       return NextResponse.json(
@@ -17,24 +26,20 @@ export async function POST(req: Request) {
       );
     }
 
-    const systemPrompt = `You are an expert prompt engineer. Your task is to optimize the following prompt for the "${model || 'general'}" AI model.
-    The goal is to make the prompt clearer, more specific, and better structured to yield the best results.
-    Apply the "${style || 'detailed'}" style to the optimized prompt.
+    // Create the instruction for the AI
+    const systemInstruction = `You are an expert prompt engineer. 
+    Optimize the following prompt to be clearer, more specific, and better structured.
+    Apply the "${style || 'detailed'}" style.
     Return ONLY the optimized prompt text, nothing else.`;
 
-    const completion = await openai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt }
-      ],
-      model: "gpt-3.5-turbo",
-    });
-
-    const optimizedPrompt = completion.choices[0].message.content;
+    // Ask Gemini to generate the content
+    const result = await model.generateContent(systemInstruction + "\n\nOriginal Prompt: " + prompt);
+    const response = await result.response;
+    const optimizedPrompt = response.text();
 
     return NextResponse.json({ optimizedPrompt });
   } catch (error: any) {
-    console.error('OpenAI Error:', error);
+    console.error('Gemini Error:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to optimize prompt' },
       { status: 500 }
