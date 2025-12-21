@@ -60,14 +60,17 @@ export default function PromptOptimizer() {
     setIsOptimizing(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/supabase-functions-optimize-prompt`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ prompt: inputPrompt }),
-      });
+      const response = await fetch('/api/optimize', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ 
+      prompt: inputPrompt,
+      model: selectedModel,
+      style: selectedStyle
+    }),
+  });
 
       const data = await response.json();
       const error = !response.ok ? { message: data.error || 'Failed to optimize prompt' } : null;
