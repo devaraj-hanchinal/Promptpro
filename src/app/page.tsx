@@ -14,9 +14,17 @@ export default function Page() {
       <Header />
       <main className="flex-1">
         <Hero />
+        
         <div id="optimizer">
           <PromptOptimizer />
         </div>
+
+        {/* --- THIS IS THE NEW SECTION --- */}
+        <div id="history" className="scroll-mt-24">
+           <HistoryList />
+        </div>
+        {/* ------------------------------- */}
+
         <Features />
         <Pricing />
         <FAQ />
