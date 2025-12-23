@@ -1,37 +1,46 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-
-    // 1. Check if Key exists
+    
     if (!apiKey) {
-      return NextResponse.json({ optimizedPrompt: "Error: No API Key found in Vercel." });
+      return NextResponse.json(
+        { error: 'Gemini API key is not configured' }, 
+        { status: 500 }
+      );
     }
 
-    // 2. Direct Call to Google to list available models
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-    const data = await response.json();
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // UPDATED: Using a model CONFIRMED to exist in your account
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    // 3. Handle Google Error
-    if (data.error) {
-      return NextResponse.json({ 
-        optimizedPrompt: `GOOGLE ERROR: ${data.error.message} (Code: ${data.error.code})` 
-      });
+    const { prompt, style } = await req.json();
+
+    if (!prompt) {
+      return NextResponse.json(
+        { error: 'Prompt is required' },
+        { status: 400 }
+      );
     }
 
-    // 4. Success! List the models
-    const modelNames = data.models
-      ? data.models.map((m: any) => m.name.replace('models/', '')).join(', ')
-      : "No models found.";
+    const systemInstruction = `You are an expert prompt engineer. 
+    Optimize the following prompt to be clearer, more specific, and better structured.
+    Apply the "${style || 'detailed'}" style.
+    Return ONLY the optimized prompt text, nothing else.`;
 
-    return NextResponse.json({ 
-      optimizedPrompt: `SUCCESS! Your API Key works. Available Models: \n\n${modelNames}` 
-    });
+    const result = await model.generateContent(systemInstruction + "\n\nOriginal Prompt: " + prompt);
+    const response = await result.response;
+    const optimizedPrompt = response.text();
 
+    return NextResponse.json({ optimizedPrompt });
   } catch (error: any) {
-    return NextResponse.json({ 
-      optimizedPrompt: `SYSTEM ERROR: ${error.message}` 
-    });
+    console.error('Gemini Error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to optimize prompt' },
+      { status: 500 }
+    );
   }
 }
