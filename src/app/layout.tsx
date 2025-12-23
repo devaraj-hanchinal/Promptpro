@@ -6,9 +6,8 @@ import { Toaster } from "@/components/ui/toaster";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "PromptPro - AI Prompt Optimizer",
-  description: "Transform your prompts into powerful AI instructions. Get better results from ChatGPT, Claude, Gemini, and more.",
-  keywords: ["AI", "prompt engineering", "ChatGPT", "prompt optimizer", "AI prompts"],
+  title: "Prompt Pro - AI Prompt Optimizer",
+  description: "Transform your basic prompts into professional AI instructions.",
 };
 
 export default function RootLayout({
@@ -17,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+    <html lang="en" className="scroll-smooth">
+      <body className={inter.className}>
         {children}
         <Toaster />
       </body>
