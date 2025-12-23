@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     
     // UPDATED: Using a model CONFIRMED to exist in your account
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite-preview-02-05" });
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
     const { prompt, style } = await req.json();
 
