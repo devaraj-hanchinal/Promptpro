@@ -1,102 +1,100 @@
 "use client";
 
-import { useState } from "react";
+import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Sparkles, Copy, Check, Wand2, ArrowRight, Zap, RefreshCw } from "lucide-react";
+import { Wand2, Copy, Check, RefreshCw, Eraser } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-
-
-const AI_MODELS = [
-  { value: "chatgpt", label: "ChatGPT" },
-  { value: "claude", label: "Claude" },
-  { value: "gemini", label: "Gemini" },
-  { value: "llama", label: "Llama" },
-  { value: "general", label: "General Purpose" },
-];
-
-const PROMPT_STYLES = [
-  { value: "detailed", label: "Detailed & Comprehensive" },
-  { value: "concise", label: "Concise & Direct" },
-  { value: "creative", label: "Creative & Imaginative" },
-  { value: "technical", label: "Technical & Precise" },
-  { value: "conversational", label: "Conversational" },
-];
+import { getAppwriteDatabases, getAppwriteAccount } from "@/lib/appwrite";
 
 export default function PromptOptimizer() {
-  const [inputPrompt, setInputPrompt] = useState("");
-  const [optimizedPrompt, setOptimizedPrompt] = useState("");
-  const [selectedModel, setSelectedModel] = useState("general");
-  const [selectedStyle, setSelectedStyle] = useState("detailed");
+  const [prompt, setPrompt] = useState('');
+  const [optimizedPrompt, setOptimizedPrompt] = useState('');
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('general');
+  const [outputStyle, setOutputStyle] = useState('detailed');
   const [usageCount, setUsageCount] = useState(0);
   const { toast } = useToast();
 
-  const FREE_LIMIT = 5;
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(optimizedPrompt);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast({
+      title: "Copied to clipboard",
+      description: "Ready to paste into your favorite AI tool",
+    });
+  };
+
+  const handleClear = () => {
+    setPrompt('');
+    setOptimizedPrompt('');
+    setCopied(false);
+  };
 
   const optimizePrompt = async () => {
-    if (!inputPrompt.trim()) {
+    if (!prompt.trim()) {
       toast({
-        title: "Empty Prompt",
-        description: "Please enter a prompt to optimize.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (usageCount >= FREE_LIMIT) {
-      toast({
-        title: "Free Limit Reached",
-        description: "Upgrade to Premium for unlimited optimizations!",
+        title: "Empty prompt",
+        description: "Please enter a prompt to optimize",
         variant: "destructive",
       });
       return;
     }
 
     setIsOptimizing(true);
-
     try {
+      // 1. Ask the AI to optimize
       const response = await fetch('/api/optimize', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ 
-      prompt: inputPrompt,
-      model: selectedModel,
-      style: selectedStyle
-    }),
-  });
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prompt,
+          style: outputStyle,
+          model: selectedModel
+        }),
+      });
 
       const data = await response.json();
-      const error = !response.ok ? { message: data.error || 'Failed to optimize prompt' } : null;
-
-      if (error) {
-        throw new Error(error.message || 'Failed to optimize prompt');
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
+      if (!response.ok) throw new Error(data.error || 'Optimization failed');
 
       const optimized = data.optimizedPrompt;
-      
       setOptimizedPrompt(optimized);
       setUsageCount((prev) => prev + 1);
 
+      // 2. SAVE TO HISTORY (This is the new part!)
+      try {
+        const account = getAppwriteAccount();
+        const user = await account.get(); // Check if user is logged in
+        const databases = getAppwriteDatabases();
+
+        await databases.createDocument(
+          'prompt-pro-db', // Database ID
+          'history',       // Collection ID
+          'unique()',      // Auto-generate ID
+          {
+            prompt: prompt,
+            response: optimized,
+            model: selectedModel,
+            user_id: user.$id
+          }
+        );
+        console.log("Saved to history!");
+      } catch (dbError) {
+        console.log("Not saved (User might be logged out)");
+      }
+
       toast({
         title: "Prompt Optimized!",
-        description: "Your prompt has been enhanced using ChatGPT.",
+        description: "Your prompt has been enhanced successfully.",
       });
+
     } catch (error: any) {
-      console.error('Optimization error:', error);
       toast({
         title: "Optimization Failed",
-        description: error.message || "Failed to optimize prompt. Please try again.",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -104,286 +102,135 @@ export default function PromptOptimizer() {
     }
   };
 
-  const optimizePromptOld = async () => {
-    if (!inputPrompt.trim()) {
-      toast({
-        title: "Empty Prompt",
-        description: "Please enter a prompt to optimize.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (usageCount >= FREE_LIMIT) {
-      toast({
-        title: "Free Limit Reached",
-        description: "Upgrade to Premium for unlimited optimizations!",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsOptimizing(true);
-
-    // Simulate AI optimization (in production, this would call an API)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    const modelName = AI_MODELS.find((m) => m.value === selectedModel)?.label || "AI";
-    const styleName = PROMPT_STYLES.find((s) => s.value === selectedStyle)?.label || "detailed";
-
-    // Generate optimized prompt based on style
-    let optimized = "";
-    
-    switch (selectedStyle) {
-      case "detailed":
-        optimized = `You are an expert assistant. I need your help with the following task:
-
-**Context:** ${inputPrompt}
-
-**Requirements:**
-- Provide a comprehensive and well-structured response
-- Include relevant examples where appropriate
-- Consider multiple perspectives and edge cases
-- Format the output for easy readability
-
-**Expected Output Format:**
-Please structure your response with clear headings, bullet points where appropriate, and a summary at the end.
-
-**Additional Notes:**
-- If any clarification is needed, please ask before proceeding
-- Prioritize accuracy and completeness over brevity`;
-        break;
-      case "concise":
-        optimized = `Task: ${inputPrompt}
-
-Instructions:
-- Be direct and to the point
-- Provide only essential information
-- Use bullet points for clarity
-- Maximum 3-5 key points
-
-Respond concisely.`;
-        break;
-      case "creative":
-        optimized = `🎨 Creative Challenge:
-
-"${inputPrompt}"
-
-Guidelines for your response:
-• Think outside the box - unconventional ideas welcome
-• Use vivid language and engaging storytelling
-• Include metaphors or analogies if helpful
-• Feel free to explore multiple creative angles
-• Make it memorable and inspiring
-
-Let your creativity flow!`;
-        break;
-      case "technical":
-        optimized = `**Technical Request**
-
-Objective: ${inputPrompt}
-
-Requirements:
-1. Provide technically accurate information
-2. Include code examples/specifications where relevant
-3. Reference best practices and standards
-4. Consider performance and scalability implications
-5. Note any potential limitations or trade-offs
-
-Output Format: Structured technical documentation with clear sections.`;
-        break;
-      case "conversational":
-        optimized = `Hey! I'd love your help with something.
-
-${inputPrompt}
-
-Feel free to ask me any follow-up questions if you need more context. I'm looking for a friendly, easy-to-understand explanation. Thanks!`;
-        break;
-      default:
-        optimized = inputPrompt;
-    }
-
-    // Add model-specific optimization hints
-    if (selectedModel === "chatgpt") {
-      optimized += "\n\n[Optimized for ChatGPT - Uses clear structure and explicit instructions]";
-    } else if (selectedModel === "claude") {
-      optimized += "\n\n[Optimized for Claude - Emphasizes context and nuanced understanding]";
-    } else if (selectedModel === "gemini") {
-      optimized += "\n\n[Optimized for Gemini - Balanced for multimodal capabilities]";
-    }
-
-    setOptimizedPrompt(optimized);
-    setUsageCount((prev) => prev + 1);
-    setIsOptimizing(false);
-
-    toast({
-      title: "Prompt Optimized! ✨",
-      description: "Your prompt has been enhanced for better AI responses.",
-    });
-  };
-
-  const copyToClipboard = async () => {
-    await navigator.clipboard.writeText(optimizedPrompt);
-    setCopied(true);
-    toast({
-      title: "Copied!",
-      description: "Optimized prompt copied to clipboard.",
-    });
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const clearAll = () => {
-    setInputPrompt("");
-    setOptimizedPrompt("");
-  };
-
   return (
-    <section className="py-16 md:py-24">
-      <div className="container">
-        <div className="text-center mb-12">
-          <Badge variant="secondary" className="mb-4">
-            <Zap className="h-3 w-3 mr-1" />
-            {FREE_LIMIT - usageCount} free optimizations remaining
-          </Badge>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Transform Your <span className="gradient-text">Prompts</span>
-          </h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Enter your basic prompt below and watch it transform into a powerful, 
-            optimized instruction that gets better results from any AI.
-          </p>
-        </div>
+    <div className="grid md:grid-cols-2 gap-6 w-full max-w-6xl mx-auto p-4">
+      {/* Input Section */}
+      <div className="space-y-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-full flex flex-col">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+              <Wand2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-lg text-gray-900 dark:text-white">Your Prompt</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Enter the prompt you want to optimize</p>
+            </div>
+          </div>
 
-        <div className="grid lg:grid-cols-2 gap-6 max-w-6xl mx-auto">
-          {/* Input Card */}
-          <Card className="border-2 hover:border-primary/50 transition-colors">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wand2 className="h-5 w-5 text-primary" />
-                Your Prompt
-              </CardTitle>
-              <CardDescription>
-                Enter the prompt you want to optimize
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                placeholder="e.g., Write a blog post about AI..."
-                className="min-h-[200px] resize-none"
-                value={inputPrompt}
-                onChange={(e) => setInputPrompt(e.target.value)}
-              />
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Target AI Model</label>
-                  <Select value={selectedModel} onValueChange={setSelectedModel}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AI_MODELS.map((model) => (
-                        <SelectItem key={model.value} value={model.value}>
-                          {model.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Output Style</label>
-                  <Select value={selectedStyle} onValueChange={setSelectedStyle}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROMPT_STYLES.map((style) => (
-                        <SelectItem key={style.value} value={style.value}>
-                          {style.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+          <Textarea 
+            placeholder="e.g., Write a blog post about AI..."
+            className="flex-1 min-h-[200px] resize-none text-base p-4 bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 focus:ring-purple-500 mb-4"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+          />
 
-              <div className="flex gap-2">
-                <Button 
-                  className="flex-1 gradient-bg hover:opacity-90 gap-2"
-                  onClick={optimizePrompt}
-                  disabled={isOptimizing}
-                >
-                  {isOptimizing ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                      Optimizing...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Optimize Prompt
-                    </>
-                  )}
-                </Button>
-                <Button variant="outline" onClick={clearAll}>
-                  Clear
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Target AI Model</label>
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">General Purpose</SelectItem>
+                  <SelectItem value="gpt4">GPT-4 / ChatGPT</SelectItem>
+                  <SelectItem value="midjourney">Midjourney</SelectItem>
+                  <SelectItem value="dalle">DALL-E 3</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Output Style</label>
+              <Select value={outputStyle} onValueChange={setOutputStyle}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="detailed">Detailed & Comprehensive</SelectItem>
+                  <SelectItem value="concise">Concise & Direct</SelectItem>
+                  <SelectItem value="creative">Creative & Engaging</SelectItem>
+                  <SelectItem value="technical">Technical & Precise</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-          {/* Output Card */}
-          <Card className="border-2 border-primary/20 bg-gradient-to-br from-violet-50/50 to-purple-50/50 dark:from-violet-950/20 dark:to-purple-950/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                Optimized Prompt
-              </CardTitle>
-              <CardDescription>
-                Your enhanced, AI-ready prompt
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="relative">
-                <Textarea
-                  placeholder="Your optimized prompt will appear here..."
-                  className="min-h-[200px] resize-none bg-background"
-                  value={optimizedPrompt}
-                  readOnly
-                />
-                {optimizedPrompt && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="absolute top-2 right-2 gap-1"
-                    onClick={copyToClipboard}
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="h-3 w-3" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3 w-3" />
-                        Copy
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-
-              {optimizedPrompt && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <ArrowRight className="h-4 w-4" />
-                  <span>Paste this optimized prompt into your favorite AI tool</span>
-                </div>
+          <div className="flex gap-3 mt-auto">
+            <Button 
+              className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-lg shadow-indigo-500/20 transition-all duration-200"
+              onClick={optimizePrompt}
+              disabled={isOptimizing}
+            >
+              {isOptimizing ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Optimizing...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Optimize Prompt
+                </>
               )}
-            </CardContent>
-          </Card>
+            </Button>
+            <Button variant="outline" onClick={handleClear}>
+              <Eraser className="w-4 h-4" />
+              <span className="sr-only">Clear</span>
+            </Button>
+          </div>
         </div>
       </div>
-    </section>
+
+      {/* Output Section */}
+      <div className="space-y-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-purple-100 dark:border-purple-900/30 p-6 shadow-sm h-full flex flex-col relative overflow-hidden ring-1 ring-purple-500/10">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-fuchsia-500" />
+          
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+              <Wand2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-lg text-gray-900 dark:text-white">Optimized Prompt</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Your enhanced, AI-ready prompt</p>
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-[200px] p-4 rounded-lg bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+            {optimizedPrompt || (
+              <span className="text-gray-400 italic">
+                Your optimized prompt will appear here...
+              </span>
+            )}
+          </div>
+
+          <div className="flex justify-between items-center mt-4 text-sm text-gray-500">
+            <span>
+              {usageCount > 0 ? `Optimized ${usageCount} times this session` : 'Paste this optimized prompt into your favorite AI tool'}
+            </span>
+            {optimizedPrompt && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className={copied ? "text-green-600" : "text-gray-600"}
+                onClick={handleCopy}
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
