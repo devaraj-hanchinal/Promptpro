@@ -46,7 +46,7 @@ export default function PromptOptimizer() {
 
     setIsOptimizing(true);
     try {
-      // 1. Ask the AI to optimize
+      // 1. Optimize the prompt
       const response = await fetch('/api/optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,22 +58,23 @@ export default function PromptOptimizer() {
       });
 
       const data = await response.json();
+
       if (!response.ok) throw new Error(data.error || 'Optimization failed');
 
       const optimized = data.optimizedPrompt;
       setOptimizedPrompt(optimized);
       setUsageCount((prev) => prev + 1);
 
-      // 2. SAVE TO HISTORY (This is the new part!)
+      // 2. Save to History
       try {
         const account = getAppwriteAccount();
-        const user = await account.get(); // Check if user is logged in
+        const user = await account.get(); 
         const databases = getAppwriteDatabases();
 
         await databases.createDocument(
-          'prompt-pro-db', // Database ID
-          'history',       // Collection ID
-          'unique()',      // Auto-generate ID
+          'prompt-pro-db', 
+          'history',       
+          'unique()',      
           {
             prompt: prompt,
             response: optimized,
@@ -81,16 +82,15 @@ export default function PromptOptimizer() {
             user_id: user.$id
           }
         );
-        console.log("Saved to history!");
+        console.log("History saved successfully!");
       } catch (dbError) {
-        console.log("Not saved (User might be logged out)");
+        console.log("History not saved (User might be logged out)");
       }
 
       toast({
         title: "Prompt Optimized!",
         description: "Your prompt has been enhanced successfully.",
       });
-
     } catch (error: any) {
       toast({
         title: "Optimization Failed",
