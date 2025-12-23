@@ -34,4 +34,14 @@ export function getAppwriteDatabases() {
   return databases;
 }
 
+// --- THIS IS THE MISSING PIECE ---
+export interface AppwriteUser {
+    $id: string;
+    name: string;
+    email: string;
+    emailVerification: boolean;
+    status: boolean;
+    prefs: Record<string, any>;
+}
+
 export { ID };
