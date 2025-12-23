@@ -3,7 +3,7 @@
 import { Client, Account, Databases, ID } from "appwrite";
 
 const APPWRITE_ENDPOINT = "https://cloud.appwrite.io/v1";
-const APPWRITE_PROJECT_ID = "6941561a0031b0bf7843"; // Your ID
+const APPWRITE_PROJECT_ID = "6941561a0031b0bf7843"; 
 
 let client: Client | null = null;
 let account: Account | null = null;
@@ -35,7 +35,3 @@ export function getAppwriteDatabases() {
 }
 
 export { ID };
-  email: string;
-  emailVerification: boolean;
-  status: boolean;
-}
