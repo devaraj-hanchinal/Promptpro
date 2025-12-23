@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image'; // Import Image for the logo
+import Image from 'next/image'; 
 import { Button } from "@/components/ui/button";
 import { getAppwriteAccount } from "@/lib/appwrite";
-import { Menu, X, User, Crown, LogOut } from "lucide-react"; // Import Crown icon
+import { Menu, X, User, Crown, LogOut } from "lucide-react"; 
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,12 +16,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-// Define the User interface locally to include labels
 interface AppwriteUser {
   $id: string;
   name: string;
   email: string;
-  labels?: string[]; // We need labels to check for 'premium'
+  labels?: string[];
 }
 
 export default function Header() {
@@ -42,7 +41,6 @@ export default function Header() {
         const currentUser = await account.get();
         setUser(currentUser as unknown as AppwriteUser);
         
-        // Check if user has 'premium' label
         if ((currentUser as any).labels && (currentUser as any).labels.includes('premium')) {
           setIsPremium(true);
         }
@@ -68,30 +66,31 @@ export default function Header() {
   };
 
   const navLinks = [
+    { name: 'Home', href: '/' },      // <--- ADDED HOME BUTTON
     { name: 'Features', href: '/#features' },
-    { name: 'History', href: '/history' }, // CHANGED: Now points to separate page
+    { name: 'History', href: '/history' }, 
     { name: 'Pricing', href: '/#pricing' },
     { name: 'FAQ', href: '/#faq' },
   ];
 
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-      isScrolled || mobileMenuOpen ? 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800' : 'bg-transparent'
+      isScrolled || mobileMenuOpen ? 'bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 shadow-sm' : 'bg-transparent'
     }`}>
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         
         {/* LOGO SECTION */}
-        <Link href="/" className="flex items-center gap-2">
-          {/* Using your uploaded logo.jpg */}
-          <div className="relative w-8 h-8 md:w-10 md:h-10">
+        <Link href="/" className="flex items-center gap-2 group">
+          <div className="relative w-8 h-8 md:w-9 md:h-9 transition-transform group-hover:scale-110 duration-200">
              <Image 
                src="/logo.jpg" 
-               alt="PromptPro Logo" 
+               alt="Prompt Pro Logo" 
                fill 
                className="object-contain"
              />
           </div>
-          <span className="font-bold text-xl bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">
+          {/* RENAMED TO PROMPT PRO */}
+          <span className="font-bold text-xl tracking-tight text-gray-900 dark:text-white group-hover:bg-gradient-to-r group-hover:from-violet-600 group-hover:to-indigo-600 group-hover:bg-clip-text group-hover:text-transparent transition-all">
             Prompt Pro
           </span>
         </Link>
@@ -114,15 +113,14 @@ export default function Header() {
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar className="h-10 w-10 border border-gray-200">
-                    <AvatarFallback className="bg-violet-100 text-violet-700">
-                      {user.name ? user.name.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors">
+                  <Avatar className="h-10 w-10 border border-gray-200 shadow-sm">
+                    <AvatarFallback className="bg-violet-100 text-violet-700 font-semibold">
+                      {user.name ? user.name.charAt(0).toUpperCase() : <User className="w-5 h-5" />}
                     </AvatarFallback>
                   </Avatar>
-                  {/* PREMIUM BADGE INDICATOR */}
                   {isPremium && (
-                    <div className="absolute -top-1 -right-1 bg-yellow-400 text-white p-0.5 rounded-full border-2 border-white" title="Premium User">
+                    <div className="absolute -top-1 -right-1 bg-yellow-400 text-white p-0.5 rounded-full border-2 border-white shadow-sm" title="Premium User">
                       <Crown className="w-3 h-3 fill-white" />
                     </div>
                   )}
@@ -133,13 +131,13 @@ export default function Header() {
                   <div className="flex flex-col space-y-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium leading-none">{user.name || 'User'}</p>
-                      {isPremium && <span className="text-[10px] bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-1.5 py-0.5 rounded font-bold">PRO</span>}
+                      {isPremium && <span className="text-[10px] bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-1.5 py-0.5 rounded font-bold shadow-sm">PRO</span>}
                     </div>
                     <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-red-600 cursor-pointer">
+                <DropdownMenuItem onClick={handleLogout} className="text-red-600 cursor-pointer focus:bg-red-50 focus:text-red-700">
                   <LogOut className="w-4 h-4 mr-2" />
                   Log out
                 </DropdownMenuItem>
@@ -147,13 +145,13 @@ export default function Header() {
             </DropdownMenu>
           ) : (
             <Link href="/auth">
-              <Button variant="ghost" className="text-sm font-medium">Sign In</Button>
+              <Button variant="ghost" className="text-sm font-medium hover:text-violet-600">Sign In</Button>
             </Link>
           )}
           
           {!isPremium && (
             <Link href="/#pricing">
-                <Button className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20 rounded-full px-6">
+                <Button className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-lg shadow-indigo-500/20 rounded-full px-6 transition-all hover:scale-105 active:scale-95">
                 Get Premium
                 </Button>
             </Link>
@@ -161,19 +159,19 @@ export default function Header() {
         </div>
 
         {/* Mobile Menu Toggle */}
-        <button className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-          {mobileMenuOpen ? <X /> : <Menu />}
+        <button className="md:hidden p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? <X className="text-gray-600" /> : <Menu className="text-gray-600" />}
         </button>
       </div>
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden absolute top-16 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4 flex flex-col gap-4 shadow-xl">
+        <div className="md:hidden absolute top-16 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg border-b border-gray-200 dark:border-gray-800 p-4 flex flex-col gap-4 shadow-xl animate-in slide-in-from-top-2">
           {navLinks.map((link) => (
             <Link 
               key={link.name} 
               href={link.href}
-              className="block p-2 text-base font-medium text-gray-600 dark:text-gray-300"
+              className="block p-3 rounded-lg text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-600 transition-all"
               onClick={() => setMobileMenuOpen(false)}
             >
               {link.name}
@@ -181,12 +179,13 @@ export default function Header() {
           ))}
           <div className="h-px bg-gray-100 dark:bg-gray-800 my-2" />
           {user ? (
-             <Button variant="outline" onClick={handleLogout} className="w-full justify-start text-red-600">
+             <Button variant="outline" onClick={handleLogout} className="w-full justify-start text-red-600 hover:bg-red-50 hover:text-red-700 border-red-200">
+                <LogOut className="w-4 h-4 mr-2" />
                 Log Out
              </Button>
           ) : (
             <Link href="/auth" onClick={() => setMobileMenuOpen(false)}>
-              <Button variant="ghost" className="w-full justify-start">Sign In</Button>
+              <Button className="w-full bg-violet-600 text-white">Sign In</Button>
             </Link>
           )}
         </div>
