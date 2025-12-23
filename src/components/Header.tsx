@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image'; // Import Image for the logo
 import { Button } from "@/components/ui/button";
-import { getAppwriteAccount, AppwriteUser } from "@/lib/appwrite";
-import { Wand2, Menu, X, User } from "lucide-react";
+import { getAppwriteAccount } from "@/lib/appwrite";
+import { Menu, X, User, Crown, LogOut } from "lucide-react"; // Import Crown icon
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,10 +16,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
+// Define the User interface locally to include labels
+interface AppwriteUser {
+  $id: string;
+  name: string;
+  email: string;
+  labels?: string[]; // We need labels to check for 'premium'
+}
+
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [user, setUser] = useState<AppwriteUser | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -31,6 +41,11 @@ export default function Header() {
         const account = getAppwriteAccount();
         const currentUser = await account.get();
         setUser(currentUser as unknown as AppwriteUser);
+        
+        // Check if user has 'premium' label
+        if ((currentUser as any).labels && (currentUser as any).labels.includes('premium')) {
+          setIsPremium(true);
+        }
       } catch (err) {
         setUser(null);
       }
@@ -45,6 +60,7 @@ export default function Header() {
       const account = getAppwriteAccount();
       await account.deleteSession('current');
       setUser(null);
+      setIsPremium(false);
       window.location.reload();
     } catch (error) {
       console.error('Logout failed', error);
@@ -53,7 +69,7 @@ export default function Header() {
 
   const navLinks = [
     { name: 'Features', href: '/#features' },
-    { name: 'History', href: '/#history' }, // <--- NEW TAB ADDED HERE
+    { name: 'History', href: '/history' }, // CHANGED: Now points to separate page
     { name: 'Pricing', href: '/#pricing' },
     { name: 'FAQ', href: '/#faq' },
   ];
@@ -64,13 +80,19 @@ export default function Header() {
     }`}>
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-          <div className="p-1.5 bg-gradient-to-tr from-violet-600 to-indigo-600 rounded-lg">
-            <Wand2 className="w-5 h-5 text-white" />
+        {/* LOGO SECTION */}
+        <Link href="/" className="flex items-center gap-2">
+          {/* Using your uploaded logo.jpg */}
+          <div className="relative w-8 h-8 md:w-10 md:h-10">
+             <Image 
+               src="/logo.jpg" 
+               alt="PromptPro Logo" 
+               fill 
+               className="object-contain"
+             />
           </div>
-          <span className="bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">
-            PromptPro
+          <span className="font-bold text-xl bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">
+            PromptPro.dev
           </span>
         </Link>
 
@@ -92,23 +114,33 @@ export default function Header() {
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8">
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                  <Avatar className="h-10 w-10 border border-gray-200">
                     <AvatarFallback className="bg-violet-100 text-violet-700">
                       {user.name ? user.name.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
                     </AvatarFallback>
                   </Avatar>
+                  {/* PREMIUM BADGE INDICATOR */}
+                  {isPremium && (
+                    <div className="absolute -top-1 -right-1 bg-yellow-400 text-white p-0.5 rounded-full border-2 border-white" title="Premium User">
+                      <Crown className="w-3 h-3 fill-white" />
+                    </div>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user.name || 'User'}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium leading-none">{user.name || 'User'}</p>
+                      {isPremium && <span className="text-[10px] bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-1.5 py-0.5 rounded font-bold">PRO</span>}
+                    </div>
                     <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-red-600 cursor-pointer">
+                  <LogOut className="w-4 h-4 mr-2" />
                   Log out
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -119,9 +151,13 @@ export default function Header() {
             </Link>
           )}
           
-          <Button className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20 rounded-full px-6">
-            Get Premium
-          </Button>
+          {!isPremium && (
+            <Link href="/#pricing">
+                <Button className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/20 rounded-full px-6">
+                Get Premium
+                </Button>
+            </Link>
+          )}
         </div>
 
         {/* Mobile Menu Toggle */}
