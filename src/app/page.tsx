@@ -18,11 +18,7 @@ export default function Page() {
           <PromptOptimizer />
         </div>
 
-        {/* --- THIS IS THE NEW SECTION --- */}
-        <div id="history" className="scroll-mt-24">
-           <HistoryList />
-        </div>
-        {/* ------------------------------- */}
+        {/* The HistoryList component has been moved to /history/page.tsx */}
 
         <Features />
         <Pricing />
