@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     
     // CHANGE IS HERE: Using the specific version number "001"
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001"});
+    const model = genAI.getGenerativeModel({ model: "gemini-pro"});
 
     const { prompt, style } = await req.json();
 
