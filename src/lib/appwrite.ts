@@ -1,44 +1,40 @@
 "use client";
 
-import { Client, Account, ID } from "appwrite";
+import { Client, Account, Databases, ID } from "appwrite";
 
-// Hardcoded Appwrite configuration for reliability
-const APPWRITE_ENDPOINT = "https://nyc.cloud.appwrite.io/v1";
-const APPWRITE_PROJECT_ID = "6941561a0031b0bf7843";
+const APPWRITE_ENDPOINT = "https://cloud.appwrite.io/v1";
+const APPWRITE_PROJECT_ID = "6941561a0031b0bf7843"; // Your ID
 
 let client: Client | null = null;
 let account: Account | null = null;
+let databases: Databases | null = null;
 
 export function getAppwriteClient() {
   if (!client) {
     client = new Client()
       .setEndpoint(APPWRITE_ENDPOINT)
       .setProject(APPWRITE_PROJECT_ID);
-    console.log("Appwrite client initialized with endpoint:", APPWRITE_ENDPOINT);
-    console.log("Appwrite Project ID:", APPWRITE_PROJECT_ID);
   }
-
   return client;
 }
 
 export function getAppwriteAccount() {
-  const appwriteClient = getAppwriteClient();
-  
+  const client = getAppwriteClient();
   if (!account) {
-    account = new Account(appwriteClient);
-    console.log("Appwrite Account instance created");
+    account = new Account(client);
   }
-
   return account;
 }
 
-export { ID };
+export function getAppwriteDatabases() {
+  const client = getAppwriteClient();
+  if (!databases) {
+    databases = new Databases(client);
+  }
+  return databases;
+}
 
-export interface AppwriteUser {
-  $id: string;
-  $createdAt: string;
-  $updatedAt: string;
-  name: string;
+export { ID };
   email: string;
   emailVerification: boolean;
   status: boolean;
