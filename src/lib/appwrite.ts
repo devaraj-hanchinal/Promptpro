@@ -2,7 +2,7 @@
 
 import { Client, Account, Databases, ID } from "appwrite";
 
-const APPWRITE_ENDPOINT = "https://cloud.appwrite.io/v1";
+const APPWRITE_ENDPOINT = "https://nyc.cloud.appwrite.io/v1";
 const APPWRITE_PROJECT_ID = "6941561a0031b0bf7843"; 
 
 let client: Client | null = null;
