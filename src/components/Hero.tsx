@@ -7,12 +7,11 @@ import { Wand2, Star, Zap, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getAppwriteAccount } from "@/lib/appwrite";
 import { useToast } from "@/components/ui/use-toast";
-import LiveTicker from "@/components/LiveTicker"; // <--- IMPORTED HERE
 
 export default function Hero() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [isPremium, setIsPremium] = useState(false); // <--- NEW STATE
+  const [isPremium, setIsPremium] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -23,7 +22,6 @@ export default function Hero() {
         const currentUser = await account.get();
         setUser(currentUser);
 
-        // CHECK IF ALREADY PREMIUM
         const hasLabel = (currentUser as any).labels?.includes('premium');
         const hasPref = (currentUser as any).prefs?.plan === 'premium';
         
@@ -50,7 +48,7 @@ export default function Hero() {
         return; 
       }
 
-      // 2. Calculate Expiry
+      // 2. Calculate Expiry (1 Month from today)
       const expiryDate = new Date();
       expiryDate.setMonth(expiryDate.getMonth() + 1);
       const dateString = expiryDate.toLocaleDateString('en-US', { 
@@ -63,7 +61,7 @@ export default function Hero() {
         expiry: expiryDate.toISOString() 
       });
 
-      setIsPremium(true); // Update UI instantly
+      setIsPremium(true); // Hide button instantly
 
       toast({
         title: "🎉 Congratulations! Premium Activated",
@@ -94,8 +92,8 @@ export default function Hero() {
       </div>
 
       <div className="container mx-auto px-4 text-center">
-        {/* Trust Badge */}
-        <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-full px-4 py-1.5 mb-2 shadow-sm">
+        {/* Trust Badge (Static & Professional) */}
+        <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-full px-4 py-1.5 mb-8 shadow-sm">
           <div className="flex -space-x-2">
             {[1,2,3,4].map((i) => (
               <Avatar key={i} className="border-2 border-white w-6 h-6">
@@ -107,10 +105,7 @@ export default function Hero() {
           <div className="flex gap-0.5"><Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" /></div>
         </div>
 
-        {/* LIVE TICKER ADDED HERE */}
-        <LiveTicker />
-
-        <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-gray-900 dark:text-white mb-6 mt-6">
+        <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-gray-900 dark:text-white mb-6">
           Transform Your Prompts Into <br />
           <span className="bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">Professional AI Instructions</span>
         </h1>
@@ -128,7 +123,7 @@ export default function Hero() {
             Start Optimizing Free <Wand2 className="ml-2 h-5 w-5" />
           </Button>
 
-          {/* Claim Button - HIDDEN IF PREMIUM */}
+          {/* Claim Button - ONLY SHOWS IF NOT PREMIUM */}
           {!isPremium && (
             <Button 
               size="lg" 
