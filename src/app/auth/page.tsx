@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from 'react';
-// ... (Keep existing imports)
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
@@ -9,17 +8,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { getAppwriteAccount, ID } from "@/lib/appwrite";
-import { Wand2, Loader2, ArrowLeft, Check, Star } from "lucide-react";
+import { Wand2, Loader2, ArrowLeft, Check, Star, Eye, EyeOff, Circle } from "lucide-react";
 
 export default function AuthPage() {
-  // ... (Keep existing state variables)
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false); // New State for visibility
+  
   const { toast } = useToast();
   const router = useRouter();
+
+  // Password Validation Checks
+  const hasMinLength = password.length >= 8;
+  const hasNumber = /\d/.test(password); // Checks for at least one digit (0-9)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,14 +33,18 @@ export default function AuthPage() {
       const account = getAppwriteAccount();
 
       if (isSignUp) {
+        // Enforce strong password on Sign Up
+        if (!hasMinLength || !hasNumber) {
+          throw new Error("Password does not meet requirements.");
+        }
+
         // 1. Create Account
         await account.create(ID.unique(), email, password, name);
         
         // 2. Create Session (Log in)
         await account.createEmailPasswordSession(email, password);
 
-        // 3. Trigger Email Verification (NEW)
-        // Use window.location.origin to get the current domain (localhost or production)
+        // 3. Trigger Email Verification
         const verifyUrl = `${window.location.origin}/verify`; 
         await account.createVerification(verifyUrl);
 
@@ -65,10 +73,9 @@ export default function AuthPage() {
     }
   };
 
-  // ... (Keep the rest of the component JSX unchanged)
   return (
     <div className="min-h-screen w-full flex">
-      {/* LEFT SIDE - Branding & Social Proof */}
+      {/* LEFT SIDE - Branding & Social Proof (Unchanged) */}
       <div className="hidden lg:flex w-1/2 bg-slate-900 relative items-center justify-center overflow-hidden">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-violet-600/20 rounded-full blur-[100px]" />
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[100px]" />
@@ -141,13 +148,54 @@ export default function AuthPage() {
                 <Input id="name" placeholder="John Doe" value={name} onChange={(e) => setName(e.target.value)} required className="h-11" />
               </div>
             )}
+            
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-11" />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} className="h-11" />
+              <div className="relative">
+                {/* PASSWORD INPUT WITH TOGGLE */}
+                <Input 
+                  id="password" 
+                  type={showPassword ? "text" : "password"} 
+                  placeholder="••••••••" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  required 
+                  className="h-11 pr-10" // Add padding right for icon
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+
+              {/* PASSWORD STRENGTH INDICATORS (Only show on SignUp) */}
+              {isSignUp && (
+                <div className="flex gap-4 mt-2">
+                   {/* Min Length Indicator */}
+                   <div className="flex items-center gap-2 text-xs transition-colors duration-200">
+                     <div className={`w-2 h-2 rounded-full ${hasMinLength ? 'bg-green-500' : 'bg-gray-300'}`} />
+                     <span className={hasMinLength ? 'text-green-600' : 'text-gray-500'}>8+ characters</span>
+                   </div>
+
+                   {/* Number Indicator */}
+                   <div className="flex items-center gap-2 text-xs transition-colors duration-200">
+                     <div className={`w-2 h-2 rounded-full ${hasNumber ? 'bg-green-500' : 'bg-gray-300'}`} />
+                     <span className={hasNumber ? 'text-green-600' : 'text-gray-500'}>Contains a number</span>
+                   </div>
+                </div>
+              )}
             </div>
 
             <Button type="submit" className="w-full h-12 text-base font-medium bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg shadow-indigo-500/20" disabled={isLoading}>
