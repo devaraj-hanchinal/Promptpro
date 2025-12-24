@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -34,6 +35,84 @@ export default function PromptOptimizer() {
     setCopied(false);
   };
 
+  // --- NEW: SMART USAGE LIMIT CHECK ---
+  const checkUsageLimit = async (user: any): Promise<boolean> => {
+    const today = new Date().toISOString().split('T')[0];
+    const MAX_DAILY = 5;
+
+    // 1. PREMIUM CHECK (Labels OR Preferences)
+    const isPremiumLabel = user && user.labels && user.labels.includes('premium');
+    const isPremiumPlan = user && user.prefs && user.prefs.plan === 'premium';
+
+    if (isPremiumLabel || isPremiumPlan) {
+      return true; // Unlimited access
+    }
+
+    // 2. GUEST CHECK (LocalStorage)
+    if (!user) {
+      const storage = localStorage.getItem('guest_usage');
+      let data = storage ? JSON.parse(storage) : { date: today, count: 0 };
+      
+      // Reset counter if it's a new day
+      if (data.date !== today) {
+        data = { date: today, count: 0 };
+      }
+
+      if (data.count >= MAX_DAILY) {
+        toast({
+          title: "Daily Limit Reached",
+          description: "Guests get 5 free optimizations per day. Sign in to claim unlimited Premium.",
+          variant: "destructive",
+          action: (
+            <Link href="/auth" className="w-full">
+              <Button variant="outline" size="sm" className="w-full border-white text-white hover:bg-white hover:text-red-600">
+                Claim Premium
+              </Button>
+            </Link>
+          )
+        });
+        return false;
+      }
+
+      // Increment usage
+      data.count++;
+      localStorage.setItem('guest_usage', JSON.stringify(data));
+      return true;
+    }
+
+    // 3. FREE USER CHECK (Appwrite Preferences)
+    const prefs = user.prefs || {};
+    let lastDate = prefs.lastUsageDate;
+    let count = prefs.dailyCount || 0;
+
+    if (lastDate !== today) {
+      count = 0;
+    }
+
+    if (count >= MAX_DAILY) {
+      toast({
+        title: "Daily Limit Reached",
+        description: "Free limit reached. Click 'Get Free Premium' in the header to upgrade instantly.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    // Increment and Save to Cloud
+    try {
+      const account = getAppwriteAccount();
+      await account.updatePrefs({ 
+        ...prefs, 
+        lastUsageDate: today, 
+        dailyCount: count + 1 
+      });
+    } catch (e) {
+      console.error("Failed to update usage stats", e);
+    }
+    
+    return true;
+  };
+
   const optimizePrompt = async () => {
     if (!prompt.trim()) {
       toast({
@@ -42,6 +121,23 @@ export default function PromptOptimizer() {
         variant: "destructive",
       });
       return;
+    }
+
+    // --- CHECK LIMITS BEFORE OPTIMIZING ---
+    try {
+      const account = getAppwriteAccount();
+      let user = null;
+      try {
+        user = await account.get();
+      } catch (e) {
+        // User is guest
+      }
+
+      const allowed = await checkUsageLimit(user);
+      if (!allowed) return; // Stop execution if limit reached
+
+    } catch (err) {
+      console.error("Usage check failed", err);
     }
 
     setIsOptimizing(true);
@@ -65,7 +161,7 @@ export default function PromptOptimizer() {
       setOptimizedPrompt(optimized);
       setUsageCount((prev) => prev + 1);
 
-      // 2. Save to History
+      // 2. Save to History (Only if logged in)
       try {
         const account = getAppwriteAccount();
         const user = await account.get(); 
