@@ -35,17 +35,29 @@ export default function Pricing() {
     setLoading(true);
     try {
       const account = getAppwriteAccount();
-      // The Magic Line: Grants Premium via Preferences
-      await account.updatePrefs({ plan: 'premium', joined_offer: 'true' });
+      
+      // Calculate 1 Month Expiry
+      const expiryDate = new Date();
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+      const dateString = expiryDate.toLocaleDateString('en-US', { 
+        day: 'numeric', month: 'long', year: 'numeric' 
+      });
+
+      // Grant Premium via User Preferences
+      await account.updatePrefs({ 
+        plan: 'premium', 
+        expiry: expiryDate.toISOString() 
+      });
       
       toast({
-        title: "🎉 Premium Activated!",
-        description: "You now have unlimited access until 2026!",
+        title: "🎉 Congratulations!",
+        description: `You have unlimited access until ${dateString}.`,
+        className: "bg-green-600 text-white border-none",
         duration: 5000,
       });
 
       // Refresh page to update UI
-      setTimeout(() => window.location.reload(), 1500);
+      setTimeout(() => window.location.reload(), 2000);
 
     } catch (error) {
       toast({
@@ -115,7 +127,7 @@ export default function Pricing() {
               <span className="text-4xl font-bold text-gray-900 dark:text-white">FREE</span>
               <span className="text-lg text-gray-400 line-through decoration-red-500">₹99</span>
             </div>
-            <p className="text-sm text-violet-600 font-medium mb-6">Valid until Jan 1st, 2026</p>
+            <p className="text-sm text-violet-600 font-medium mb-6">1 Month Free Access</p>
 
             {/* THE MAGIC BUTTON */}
             {user ? (
