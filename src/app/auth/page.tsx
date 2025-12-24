@@ -16,14 +16,14 @@ export default function AuthPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // New State for visibility
+  const [showPassword, setShowPassword] = useState(false);
   
   const { toast } = useToast();
   const router = useRouter();
 
-  // Password Validation Checks
+  // Validation Logic
   const hasMinLength = password.length >= 8;
-  const hasNumber = /\d/.test(password); // Checks for at least one digit (0-9)
+  const hasNumber = /\d/.test(password);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,18 +33,17 @@ export default function AuthPage() {
       const account = getAppwriteAccount();
 
       if (isSignUp) {
-        // Enforce strong password on Sign Up
         if (!hasMinLength || !hasNumber) {
-          throw new Error("Password does not meet requirements.");
+          throw new Error("Please meet all password requirements.");
         }
 
         // 1. Create Account
         await account.create(ID.unique(), email, password, name);
         
-        // 2. Create Session (Log in)
+        // 2. Create Session
         await account.createEmailPasswordSession(email, password);
 
-        // 3. Trigger Email Verification
+        // 3. Verify
         const verifyUrl = `${window.location.origin}/verify`; 
         await account.createVerification(verifyUrl);
 
@@ -53,12 +52,10 @@ export default function AuthPage() {
           description: "Please check your email to verify your account." 
         });
       } else {
-        // Login Logic
         await account.createEmailPasswordSession(email, password);
         toast({ title: "Welcome back!", description: "You are now logged in." });
       }
 
-      // Redirect to home
       window.location.href = '/'; 
 
     } catch (error: any) {
@@ -75,7 +72,7 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen w-full flex">
-      {/* LEFT SIDE - Branding & Social Proof (Unchanged) */}
+      {/* LEFT SIDE - Branding (Unchanged) */}
       <div className="hidden lg:flex w-1/2 bg-slate-900 relative items-center justify-center overflow-hidden">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-violet-600/20 rounded-full blur-[100px]" />
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[100px]" />
@@ -87,28 +84,18 @@ export default function AuthPage() {
             </div>
             <span className="font-bold text-xl">Prompt Pro</span>
           </div>
-
           <h1 className="text-4xl font-bold mb-6 leading-tight">
             Unlock the full power of <br/>
             <span className="text-violet-400">Generative AI</span>
           </h1>
-          
           <div className="space-y-4 mb-12">
-            {[
-              "Unlimited optimizations",
-              "Advanced GPT-4 & Claude 3 Models",
-              "Priority Processing Speed",
-              "Secure History Storage"
-            ].map((item, i) => (
+            {["Unlimited optimizations", "Advanced GPT-4 & Claude 3 Models", "Priority Processing Speed", "Secure History Storage"].map((item, i) => (
               <div key={i} className="flex items-center gap-3 text-slate-300">
-                <div className="p-1 rounded-full bg-violet-500/20 text-violet-400">
-                  <Check className="w-4 h-4" />
-                </div>
+                <div className="p-1 rounded-full bg-violet-500/20 text-violet-400"><Check className="w-4 h-4" /></div>
                 <span>{item}</span>
               </div>
             ))}
           </div>
-
           <div className="p-6 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10">
              <div className="flex gap-1 mb-3">
                {[1,2,3,4,5].map(i => <Star key={i} className="w-4 h-4 fill-yellow-500 text-yellow-500" />)}
@@ -157,7 +144,6 @@ export default function AuthPage() {
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <div className="relative">
-                {/* PASSWORD INPUT WITH TOGGLE */}
                 <Input 
                   id="password" 
                   type={showPassword ? "text" : "password"} 
@@ -165,34 +151,35 @@ export default function AuthPage() {
                   value={password} 
                   onChange={(e) => setPassword(e.target.value)} 
                   required 
-                  className="h-11 pr-10" // Add padding right for icon
+                  className="h-11 pr-10" 
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
+                  tabIndex={-1} // Prevent tabbing to this button
                 >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
 
-              {/* PASSWORD STRENGTH INDICATORS (Only show on SignUp) */}
+              {/* PROFESSIONAL PASSWORD STRENGTH CHECKLIST */}
               {isSignUp && (
-                <div className="flex gap-4 mt-2">
+                <div className="grid grid-cols-2 gap-2 mt-3">
                    {/* Min Length Indicator */}
-                   <div className="flex items-center gap-2 text-xs transition-colors duration-200">
-                     <div className={`w-2 h-2 rounded-full ${hasMinLength ? 'bg-green-500' : 'bg-gray-300'}`} />
-                     <span className={hasMinLength ? 'text-green-600' : 'text-gray-500'}>8+ characters</span>
+                   <div className={`flex items-center gap-2 text-xs font-medium transition-all duration-300 ${hasMinLength ? 'text-green-600' : 'text-gray-400'}`}>
+                     <div className={`flex items-center justify-center w-4 h-4 rounded-full border transition-all duration-300 ${hasMinLength ? 'bg-green-100 border-green-500' : 'border-gray-300'}`}>
+                        {hasMinLength ? <Check className="w-2.5 h-2.5 text-green-600" /> : <Circle className="w-1.5 h-1.5 fill-gray-300 text-transparent" />}
+                     </div>
+                     <span>At least 8 characters</span>
                    </div>
 
                    {/* Number Indicator */}
-                   <div className="flex items-center gap-2 text-xs transition-colors duration-200">
-                     <div className={`w-2 h-2 rounded-full ${hasNumber ? 'bg-green-500' : 'bg-gray-300'}`} />
-                     <span className={hasNumber ? 'text-green-600' : 'text-gray-500'}>Contains a number</span>
+                   <div className={`flex items-center gap-2 text-xs font-medium transition-all duration-300 ${hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
+                     <div className={`flex items-center justify-center w-4 h-4 rounded-full border transition-all duration-300 ${hasNumber ? 'bg-green-100 border-green-500' : 'border-gray-300'}`}>
+                        {hasNumber ? <Check className="w-2.5 h-2.5 text-green-600" /> : <Circle className="w-1.5 h-1.5 fill-gray-300 text-transparent" />}
+                     </div>
+                     <span>Contains a number</span>
                    </div>
                 </div>
               )}
