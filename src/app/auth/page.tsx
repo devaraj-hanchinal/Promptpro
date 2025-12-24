@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+// ... (Keep existing imports)
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { getAppwriteAccount, ID } from "@/lib/appwrite";
 import { Wand2, Loader2, ArrowLeft, Check, Star } from "lucide-react";
 
 export default function AuthPage() {
+  // ... (Keep existing state variables)
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
@@ -29,10 +31,13 @@ export default function AuthPage() {
       if (isSignUp) {
         // 1. Create Account
         await account.create(ID.unique(), email, password, name);
-        // 2. Login
+        
+        // 2. Create Session (Log in)
         await account.createEmailPasswordSession(email, password);
-        // 3. Send Verification Email
-        const verifyUrl = `${window.location.origin}/verify`;
+
+        // 3. Trigger Email Verification (NEW)
+        // Use window.location.origin to get the current domain (localhost or production)
+        const verifyUrl = `${window.location.origin}/verify`; 
         await account.createVerification(verifyUrl);
 
         toast({ 
@@ -60,6 +65,7 @@ export default function AuthPage() {
     }
   };
 
+  // ... (Keep the rest of the component JSX unchanged)
   return (
     <div className="min-h-screen w-full flex">
       {/* LEFT SIDE - Branding & Social Proof */}
@@ -82,7 +88,7 @@ export default function AuthPage() {
           
           <div className="space-y-4 mb-12">
             {[
-              "Unlimited optimizations (Free until 2026)",
+              "Unlimited optimizations",
               "Advanced GPT-4 & Claude 3 Models",
               "Priority Processing Speed",
               "Secure History Storage"
@@ -124,7 +130,7 @@ export default function AuthPage() {
               {isSignUp ? "Create free account" : "Welcome back"}
             </h2>
             <p className="text-gray-500 dark:text-gray-400">
-              {isSignUp ? "Sign up today to claim your free Premium status." : "Sign in to access your dashboard."}
+              {isSignUp ? "Sign up today to get started." : "Sign in to access your dashboard."}
             </p>
           </div>
 
@@ -148,7 +154,7 @@ export default function AuthPage() {
               {isLoading ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {isSignUp ? "Creating..." : "Signing In..."}</>
               ) : (
-                isSignUp ? "Claim Free Premium Account" : "Sign In"
+                isSignUp ? "Create Account" : "Sign In"
               )}
             </Button>
           </form>
