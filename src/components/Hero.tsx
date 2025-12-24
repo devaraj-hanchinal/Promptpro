@@ -1,50 +1,42 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Wand2, Star, Zap, Loader2 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getAppwriteAccount } from "@/lib/appwrite";
 import { useToast } from "@/components/ui/use-toast";
+import Link from 'next/link';
 
 export default function Hero() {
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
   const { toast } = useToast();
   const router = useRouter();
 
-  useEffect(() => {
-    const checkUser = async () => {
-      try {
-        const account = getAppwriteAccount();
-        const currentUser = await account.get();
-        setUser(currentUser);
-      } catch (e) {
-        setUser(null);
-      }
-    };
-    checkUser();
-  }, []);
-
   const handleClaimPremium = async () => {
-    if (!user) {
-      router.push('/auth');
-      return;
-    }
-
     setLoading(true);
+    
     try {
       const account = getAppwriteAccount();
       
-      // Calculate 1 Month Expiry
+      // 1. DIRECT CHECK: Are we logged in right now?
+      try {
+        await account.get(); 
+      } catch (e) {
+        // If this fails, user is NOT logged in. Redirect to Auth.
+        router.push('/auth');
+        return; 
+      }
+
+      // 2. If we passed step 1, calculate 1 Month Expiry
       const expiryDate = new Date();
       expiryDate.setMonth(expiryDate.getMonth() + 1);
       const dateString = expiryDate.toLocaleDateString('en-US', { 
         day: 'numeric', month: 'long', year: 'numeric' 
       });
 
-      // Activate Premium
+      // 3. Activate Premium
       await account.updatePrefs({ 
         plan: 'premium', 
         expiry: expiryDate.toISOString() 
@@ -57,16 +49,16 @@ export default function Hero() {
         className: "bg-green-600 text-white border-none"
       });
 
-      // Refresh to update UI
+      // 4. Refresh to update UI
       setTimeout(() => window.location.reload(), 2000);
 
     } catch (error) {
+      console.error(error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Could not activate premium. Please try again."
+        description: "Something went wrong. Please refresh and try again."
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -118,7 +110,7 @@ export default function Hero() {
             disabled={loading}
           >
             {loading ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Activating...</>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Check Auth...</>
             ) : (
               <>Claim Free Premium <Zap className="ml-2 h-4 w-4 text-yellow-500 fill-yellow-500 group-hover:scale-110 transition-transform" /></>
             )}
