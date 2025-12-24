@@ -1,146 +1,176 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Check, Crown, Sparkles, Zap } from "lucide-react";
-
-const plans = [
-  {
-    name: "Free",
-    description: "Perfect for trying out PromptPro",
-    price: "₹0",
-    period: "forever",
-    features: [
-      "5 prompt optimizations per day",
-      "Basic optimization styles",
-      "General AI model support",
-      "Copy to clipboard",
-      "No account required",
-    ],
-    cta: "Get Started Free",
-    popular: false,
-  },
-  {
-    name: "Premium",
-    description: "For power users and professionals",
-    price: "₹99",
-    originalPrice: "₹299",
-    period: "per month",
-    features: [
-      "Unlimited prompt optimizations",
-      "All optimization styles",
-      "All AI model optimizations",
-      "Priority processing",
-      "Prompt history & favorites",
-      "Advanced customization options",
-      "Export prompts in multiple formats",
-      "Priority email support",
-      "Early access to new features",
-    ],
-    cta: "Start Free Trial",
-    popular: true,
-    badge: "🎉 Limited Time: FREE",
-  },
-];
+import { Check, Zap, Loader2 } from "lucide-react";
+import { getAppwriteAccount } from "@/lib/appwrite";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function Pricing() {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const account = getAppwriteAccount();
+        const currentUser = await account.get();
+        setUser(currentUser);
+
+        // Check if already premium
+        const hasLabel = (currentUser as any).labels?.includes('premium');
+        const hasPref = (currentUser as any).prefs?.plan === 'premium';
+        if (hasLabel || hasPref) setIsPremium(true);
+      } catch (e) {
+        setUser(null);
+      }
+    };
+    checkUser();
+  }, []);
+
+  const activateFreePremium = async () => {
+    setLoading(true);
+    try {
+      const account = getAppwriteAccount();
+      // The Magic Line: Grants Premium via Preferences
+      await account.updatePrefs({ plan: 'premium', joined_offer: 'true' });
+      
+      toast({
+        title: "🎉 Premium Activated!",
+        description: "You now have unlimited access until 2026!",
+        duration: 5000,
+      });
+
+      // Refresh page to update UI
+      setTimeout(() => window.location.reload(), 1500);
+
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Activation Failed",
+        description: "Please try again or contact support.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <section id="pricing" className="py-24">
-      <div className="container">
-        <div className="text-center mb-16">
-          <Badge variant="secondary" className="mb-4">
-            <Zap className="h-3 w-3 mr-1" />
-            Special Launch Offer
-          </Badge>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Simple, Transparent <span className="gradient-text">Pricing</span>
+    <section id="pricing" className="py-24 bg-white dark:bg-gray-900 relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 right-0 w-[500px] h-[500px] bg-violet-100/50 dark:bg-violet-900/10 rounded-full blur-3xl mix-blend-multiply" />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-100/50 dark:bg-indigo-900/10 rounded-full blur-3xl mix-blend-multiply" />
+      </div>
+
+      <div className="container mx-auto px-4 relative z-10">
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            Simple, Transparent Pricing
           </h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
-            Start free and upgrade when you need more. No hidden fees, cancel anytime.
+          <p className="text-xl text-gray-600 dark:text-gray-300">
+            Join thousands of professionals optimizing their workflow today.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          {plans.map((plan, index) => (
-            <Card 
-              key={index} 
-              className={`relative ${
-                plan.popular 
-                  ? "border-2 border-primary shadow-2xl shadow-primary/20 scale-105" 
-                  : "border shadow-lg"
-              }`}
-            >
-              {plan.badge && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                  <Badge className="gradient-bg text-white px-4 py-1 text-sm font-semibold">
-                    {plan.badge}
-                  </Badge>
-                </div>
-              )}
-              
-              <CardHeader className="text-center pb-2">
-                {plan.popular && (
-                  <div className="flex justify-center mb-2">
-                    <Crown className="h-8 w-8 text-yellow-500" />
-                  </div>
-                )}
-                <CardTitle className="text-2xl">{plan.name}</CardTitle>
-                <CardDescription>{plan.description}</CardDescription>
-              </CardHeader>
-              
-              <CardContent className="text-center">
-                <div className="mb-6">
-                  {plan.originalPrice && (
-                    <span className="text-lg text-muted-foreground line-through mr-2">
-                      {plan.originalPrice}
-                    </span>
-                  )}
-                  <span className="text-5xl font-bold">{plan.price}</span>
-                  <span className="text-muted-foreground ml-1">/{plan.period}</span>
-                </div>
+        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          
+          {/* FREE PLAN */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Starter</h3>
+            <div className="flex items-baseline gap-1 mb-6">
+              <span className="text-4xl font-bold text-gray-900 dark:text-white">₹0</span>
+              <span className="text-gray-500">/forever</span>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">Perfect for trying out the power of AI optimization.</p>
+            <Button variant="outline" className="w-full mb-8" asChild>
+              <Link href={user ? "/" : "/auth"}>
+                {user ? "Current Plan" : "Get Started Free"}
+              </Link>
+            </Button>
+            <ul className="space-y-4">
+              {['5 Optimizations per day', 'Basic optimization styles', 'General AI model support', 'Copy to clipboard', 'No account required'].map((feature) => (
+                <li key={feature} className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
+                  <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+          </div>
 
-                {plan.popular && (
-                  <div className="mb-6 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
-                    <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                      🎁 Premium is FREE for a limited time!
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-                      No credit card required. Enjoy all premium features.
-                    </p>
-                  </div>
-                )}
+          {/* PREMIUM PLAN (THE OFFER) */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border-2 border-violet-600 shadow-xl relative transform scale-105">
+            <div className="absolute top-0 right-0 bg-violet-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg">
+              LIMITED OFFER
+            </div>
+            
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+              Pro <Zap className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+            </h3>
+            
+            <div className="flex items-baseline gap-2 mb-1">
+              <span className="text-4xl font-bold text-gray-900 dark:text-white">FREE</span>
+              <span className="text-lg text-gray-400 line-through decoration-red-500">₹99</span>
+            </div>
+            <p className="text-sm text-violet-600 font-medium mb-6">Valid until Jan 1st, 2026</p>
 
-                <ul className="space-y-3 text-left">
-                  {plan.features.map((feature, featureIndex) => (
-                    <li key={featureIndex} className="flex items-start gap-3">
-                      <Check className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
-                      <span className="text-sm">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-              
-              <CardFooter>
-                <Button 
-                  className={`w-full ${plan.popular ? "gradient-bg hover:opacity-90" : ""}`}
-                  variant={plan.popular ? "default" : "outline"}
-                  size="lg"
-                >
-                  {plan.popular && <Sparkles className="h-4 w-4 mr-2" />}
-                  {plan.cta}
+            {/* THE MAGIC BUTTON */}
+            {user ? (
+              <Button 
+                className="w-full mb-8 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-lg shadow-indigo-500/20"
+                onClick={activateFreePremium}
+                disabled={loading || isPremium}
+              >
+                {loading ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Activating...</>
+                ) : isPremium ? (
+                  "Plan Active ✅"
+                ) : (
+                  "Claim Free Premium Now"
+                )}
+              </Button>
+            ) : (
+              <Link href="/auth">
+                <Button className="w-full mb-8 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-lg shadow-indigo-500/20">
+                  Start Free Trial
                 </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+              </Link>
+            )}
 
-        <div className="text-center mt-12">
-          <p className="text-sm text-muted-foreground">
-            💳 No credit card required for free trial • Cancel anytime • 
-            <span className="font-medium text-foreground"> 30-day money-back guarantee</span>
-          </p>
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg mb-6 border border-green-100 dark:border-green-900/30">
+              <p className="text-sm text-green-700 dark:text-green-300 font-medium text-center">
+                🎁 Premium is FREE for a limited time! <br/>
+                <span className="text-xs opacity-80 font-normal">No credit card required. Enjoy all features.</span>
+              </p>
+            </div>
+
+            <ul className="space-y-4">
+              {[
+                'Unlimited prompt optimizations',
+                'All optimization styles',
+                'All AI model optimizations',
+                'Priority processing',
+                'Prompt history & favorites',
+                'Advanced customization options',
+                'Export prompts',
+                'Early access to new features'
+              ].map((feature) => (
+                <li key={feature} className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
+                  <Check className="w-5 h-5 text-violet-600 flex-shrink-0" />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+          </div>
+
         </div>
+        
+        <p className="text-center text-sm text-gray-500 mt-12">
+          💳 No credit card required for free trial • Cancel anytime • 30-day money-back guarantee
+        </p>
       </div>
     </section>
   );
