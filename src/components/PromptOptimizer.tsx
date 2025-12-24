@@ -1,5 +1,6 @@
 "use client";
 
+// ... (Keep all existing imports)
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
@@ -8,8 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Wand2, Copy, Check, RefreshCw, Eraser } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { getAppwriteDatabases, getAppwriteAccount } from "@/lib/appwrite";
+import TrustBadge from "@/components/TrustBadge"; // <--- Add this import
 
 export default function PromptOptimizer() {
+  // ... (Keep all existing state and functions: handleCopy, handleClear, checkUsageLimit, optimizePrompt)
   const [prompt, setPrompt] = useState('');
   const [optimizedPrompt, setOptimizedPrompt] = useState('');
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -81,7 +84,7 @@ export default function PromptOptimizer() {
     if (count >= MAX_DAILY) {
       toast({
         title: "Daily Limit Reached",
-        description: "Free limit reached. Click 'Get Free Premium' in the header to upgrade instantly.",
+        description: "Free limit reached. Use promo code DA62 to upgrade instantly.",
         variant: "destructive",
       });
       return false;
@@ -143,10 +146,12 @@ export default function PromptOptimizer() {
     }
   };
 
+
   return (
-    <div className="grid md:grid-cols-2 gap-6 w-full max-w-6xl mx-auto p-4">
-      {/* Input Section */}
-      <div className="space-y-4">
+    <div className="w-full max-w-6xl mx-auto p-4">
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Input Section ... (Keep existing JSX) */}
+        <div className="space-y-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-full flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
@@ -211,8 +216,8 @@ export default function PromptOptimizer() {
         </div>
       </div>
 
-      {/* Output Section */}
-      <div className="space-y-4">
+        {/* Output Section ... (Keep existing JSX) */}
+        <div className="space-y-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-purple-100 dark:border-purple-900/30 p-6 shadow-sm h-full flex flex-col relative overflow-hidden ring-1 ring-purple-500/10">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-fuchsia-500" />
           <div className="flex items-center gap-2 mb-4">
@@ -239,6 +244,10 @@ export default function PromptOptimizer() {
           </div>
         </div>
       </div>
+      </div>
+      
+      {/* ADD TRUST BADGE HERE */}
+      <TrustBadge /> 
     </div>
   );
 }
