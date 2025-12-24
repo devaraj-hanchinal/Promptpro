@@ -35,28 +35,22 @@ export default function PromptOptimizer() {
     setCopied(false);
   };
 
-  // --- NEW: SMART USAGE LIMIT CHECK ---
+  // --- SMART USAGE LIMIT CHECK ---
   const checkUsageLimit = async (user: any): Promise<boolean> => {
     const today = new Date().toISOString().split('T')[0];
     const MAX_DAILY = 5;
 
-    // 1. PREMIUM CHECK (Labels OR Preferences)
+    // 1. PREMIUM CHECK
     const isPremiumLabel = user && user.labels && user.labels.includes('premium');
     const isPremiumPlan = user && user.prefs && user.prefs.plan === 'premium';
 
-    if (isPremiumLabel || isPremiumPlan) {
-      return true; // Unlimited access
-    }
+    if (isPremiumLabel || isPremiumPlan) return true; // Unlimited
 
-    // 2. GUEST CHECK (LocalStorage)
+    // 2. GUEST CHECK
     if (!user) {
       const storage = localStorage.getItem('guest_usage');
       let data = storage ? JSON.parse(storage) : { date: today, count: 0 };
-      
-      // Reset counter if it's a new day
-      if (data.date !== today) {
-        data = { date: today, count: 0 };
-      }
+      if (data.date !== today) data = { date: today, count: 0 };
 
       if (data.count >= MAX_DAILY) {
         toast({
@@ -73,21 +67,16 @@ export default function PromptOptimizer() {
         });
         return false;
       }
-
-      // Increment usage
       data.count++;
       localStorage.setItem('guest_usage', JSON.stringify(data));
       return true;
     }
 
-    // 3. FREE USER CHECK (Appwrite Preferences)
+    // 3. FREE USER CHECK
     const prefs = user.prefs || {};
     let lastDate = prefs.lastUsageDate;
     let count = prefs.dailyCount || 0;
-
-    if (lastDate !== today) {
-      count = 0;
-    }
+    if (lastDate !== today) count = 0;
 
     if (count >= MAX_DAILY) {
       toast({
@@ -98,101 +87,57 @@ export default function PromptOptimizer() {
       return false;
     }
 
-    // Increment and Save to Cloud
     try {
       const account = getAppwriteAccount();
-      await account.updatePrefs({ 
-        ...prefs, 
-        lastUsageDate: today, 
-        dailyCount: count + 1 
-      });
+      await account.updatePrefs({ ...prefs, lastUsageDate: today, dailyCount: count + 1 });
     } catch (e) {
       console.error("Failed to update usage stats", e);
     }
-    
     return true;
   };
 
   const optimizePrompt = async () => {
     if (!prompt.trim()) {
-      toast({
-        title: "Empty prompt",
-        description: "Please enter a prompt to optimize",
-        variant: "destructive",
-      });
+      toast({ title: "Empty prompt", description: "Please enter a prompt.", variant: "destructive" });
       return;
     }
 
-    // --- CHECK LIMITS BEFORE OPTIMIZING ---
+    // Check Limits
     try {
       const account = getAppwriteAccount();
       let user = null;
-      try {
-        user = await account.get();
-      } catch (e) {
-        // User is guest
-      }
-
+      try { user = await account.get(); } catch (e) {}
       const allowed = await checkUsageLimit(user);
-      if (!allowed) return; // Stop execution if limit reached
-
-    } catch (err) {
-      console.error("Usage check failed", err);
-    }
+      if (!allowed) return;
+    } catch (err) { console.error("Usage check failed", err); }
 
     setIsOptimizing(true);
     try {
-      // 1. Optimize the prompt
       const response = await fetch('/api/optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          prompt,
-          style: outputStyle,
-          model: selectedModel
-        }),
+        body: JSON.stringify({ prompt, style: outputStyle, model: selectedModel }),
       });
-
       const data = await response.json();
-
       if (!response.ok) throw new Error(data.error || 'Optimization failed');
 
       const optimized = data.optimizedPrompt;
       setOptimizedPrompt(optimized);
       setUsageCount((prev) => prev + 1);
 
-      // 2. Save to History (Only if logged in)
+      // Save History
       try {
         const account = getAppwriteAccount();
         const user = await account.get(); 
         const databases = getAppwriteDatabases();
+        await databases.createDocument('prompt-pro-db', 'history', 'unique()', {
+            prompt: prompt, response: optimized, model: selectedModel, user_id: user.$id
+        });
+      } catch (dbError) { /* Guest or error */ }
 
-        await databases.createDocument(
-          'prompt-pro-db', 
-          'history',       
-          'unique()',      
-          {
-            prompt: prompt,
-            response: optimized,
-            model: selectedModel,
-            user_id: user.$id
-          }
-        );
-        console.log("History saved successfully!");
-      } catch (dbError) {
-        console.log("History not saved (User might be logged out)");
-      }
-
-      toast({
-        title: "Prompt Optimized!",
-        description: "Your prompt has been enhanced successfully.",
-      });
+      toast({ title: "Prompt Optimized!", description: "Enhanced successfully." });
     } catch (error: any) {
-      toast({
-        title: "Optimization Failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Optimization Failed", description: error.message, variant: "destructive" });
     } finally {
       setIsOptimizing(false);
     }
@@ -224,9 +169,7 @@ export default function PromptOptimizer() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Target AI Model</label>
               <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="general">General Purpose</SelectItem>
                   <SelectItem value="gpt4">GPT-4 / ChatGPT</SelectItem>
@@ -238,9 +181,7 @@ export default function PromptOptimizer() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Output Style</label>
               <Select value={outputStyle} onValueChange={setOutputStyle}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="detailed">Detailed & Comprehensive</SelectItem>
                   <SelectItem value="concise">Concise & Direct</SelectItem>
@@ -258,20 +199,13 @@ export default function PromptOptimizer() {
               disabled={isOptimizing}
             >
               {isOptimizing ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Optimizing...
-                </>
+                <><RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Optimizing...</>
               ) : (
-                <>
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Optimize Prompt
-                </>
+                <><Wand2 className="mr-2 h-4 w-4" /> Optimize Prompt</>
               )}
             </Button>
             <Button variant="outline" onClick={handleClear}>
-              <Eraser className="w-4 h-4" />
-              <span className="sr-only">Clear</span>
+              <Eraser className="w-4 h-4" /><span className="sr-only">Clear</span>
             </Button>
           </div>
         </div>
@@ -281,7 +215,6 @@ export default function PromptOptimizer() {
       <div className="space-y-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-purple-100 dark:border-purple-900/30 p-6 shadow-sm h-full flex flex-col relative overflow-hidden ring-1 ring-purple-500/10">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-fuchsia-500" />
-          
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
               <Wand2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -293,35 +226,14 @@ export default function PromptOptimizer() {
           </div>
 
           <div className="flex-1 min-h-[200px] p-4 rounded-lg bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
-            {optimizedPrompt || (
-              <span className="text-gray-400 italic">
-                Your optimized prompt will appear here...
-              </span>
-            )}
+            {optimizedPrompt || <span className="text-gray-400 italic">Your optimized prompt will appear here...</span>}
           </div>
 
           <div className="flex justify-between items-center mt-4 text-sm text-gray-500">
-            <span>
-              {usageCount > 0 ? `Optimized ${usageCount} times this session` : 'Paste this optimized prompt into your favorite AI tool'}
-            </span>
+            <span>{usageCount > 0 ? `Optimized ${usageCount} times this session` : 'Paste this optimized prompt into your favorite AI tool'}</span>
             {optimizedPrompt && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className={copied ? "text-green-600" : "text-gray-600"}
-                onClick={handleCopy}
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4 mr-2" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4 mr-2" />
-                    Copy
-                  </>
-                )}
+              <Button variant="ghost" size="sm" className={copied ? "text-green-600" : "text-gray-600"} onClick={handleCopy}>
+                {copied ? <><Check className="w-4 h-4 mr-2" /> Copied</> : <><Copy className="w-4 h-4 mr-2" /> Copy</>}
               </Button>
             )}
           </div>
