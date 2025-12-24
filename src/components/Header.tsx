@@ -125,7 +125,7 @@ export default function Header() {
     <>
       {/* PROFESSIONAL ANNOUNCEMENT BAR */}
       <div className="bg-gradient-to-r from-violet-900 to-indigo-900 text-white text-xs md:text-sm py-2 px-4 text-center font-medium relative z-[60]">
-        <span className="opacity-90">✨ Launch Offer: </span>
+        <span className="opacity-90">✨ New Year Offer : </span>
         <span className="font-bold text-yellow-300">Get 1 Month of Premium for FREE!</span>
         <span className="opacity-90 ml-1"> (Limited time only)</span>
       </div>
