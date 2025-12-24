@@ -27,15 +27,14 @@ export default function Hero() {
   }, []);
 
   return (
-    <section className="relative pt-40 pb-20 overflow-hidden">
+    <section className="relative pt-40 pb-10 overflow-hidden">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl -z-10">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-200/30 rounded-full blur-3xl mix-blend-multiply animate-blob" />
         <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-indigo-200/30 rounded-full blur-3xl mix-blend-multiply animate-blob animation-delay-2000" />
       </div>
 
       <div className="container mx-auto px-4 text-center">
-        {/* Trust Badge Removed from Here */}
-
+        
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-gray-900 dark:text-white mb-6">
           Transform Your Prompts Into <br />
           <span className="bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">Professional AI Instructions</span>
@@ -44,7 +43,7 @@ export default function Hero() {
           Stop getting average results. Our intelligent optimizer refines your inputs for ChatGPT, Claude, and Gemini to deliver production-ready results.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
           <Button 
             size="lg" 
             className="h-12 px-8 text-lg bg-gray-900 text-white hover:bg-gray-800 shadow-xl" 
@@ -55,13 +54,6 @@ export default function Hero() {
 
           {/* Promo Code Input - Only show if not premium */}
           {!isPremium && <PromoCodeInput />}
-        </div>
-
-        <div className="border-t border-gray-100 dark:border-gray-800 pt-10">
-          <p className="text-sm font-medium text-gray-400 mb-6 uppercase tracking-wider">Trusted by teams at innovative companies</p>
-          <div className="flex flex-wrap justify-center gap-8 md:gap-16 opacity-40 grayscale font-bold text-xl text-gray-600">
-            <span>ZAPIER</span><span>NOTION</span><span>LINEAR</span><span>RAYCAST</span><span>VERCEL</span>
-          </div>
         </div>
       </div>
     </section>
