@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import Link from 'next/link';
 
-// 1. Create a sub-component for the logic to avoid Suspense errors
+// 1. Logic Component (Handles the verification)
 function VerifyContent() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const searchParams = useSearchParams();
@@ -68,7 +68,7 @@ function VerifyContent() {
   );
 }
 
-// 2. Main Page Component wraps the content in Suspense
+// 2. Main Page Component (Fixes the Vercel Error)
 export default function VerifyPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
