@@ -1,45 +1,55 @@
-import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { NextResponse } from "next/server";
+
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Gemini API key is not configured' }, 
-        { status: 500 }
-      );
+    const { prompt, style, model } = await req.json();
+
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({ error: "API Key missing" }, { status: 500 });
     }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // UPDATED: Using a model CONFIRMED to exist in your account
-    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-
-    const { prompt, style } = await req.json();
 
     if (!prompt) {
-      return NextResponse.json(
-        { error: 'Prompt is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    const systemInstruction = `You are an expert prompt engineer. 
-    Optimize the following prompt to be clearer, more specific, and better structured.
-    Apply the "${style || 'detailed'}" style.
-    Return ONLY the optimized prompt text, nothing else.`;
+    // Use a lightweight model for speed and higher limits
+    const aiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    const result = await model.generateContent(systemInstruction + "\n\nOriginal Prompt: " + prompt);
-    const response = await result.response;
-    const optimizedPrompt = response.text();
+    const systemInstruction = `
+      You are an expert Prompt Engineer. Optimize the following prompt to be clear, 
+      effective, and ${style}. The target AI model is ${model}.
+      Return ONLY the optimized prompt text. No explanations.
+    `;
 
-    return NextResponse.json({ optimizedPrompt });
+    try {
+      const result = await aiModel.generateContent(`${systemInstruction}\n\nUser Prompt: "${prompt}"`);
+      const response = await result.response;
+      const optimizedPrompt = response.text();
+
+      return NextResponse.json({ optimizedPrompt });
+
+    } catch (aiError: any) {
+      console.error("Gemini API Error:", aiError);
+      
+      // Check for Rate Limit (429) or Quota Exceeded
+      if (aiError.message?.includes("429") || aiError.message?.includes("Quota") || aiError.message?.includes("Too Many Requests")) {
+         return NextResponse.json(
+           { error: "Server busy (Rate Limit). Please wait 1 minute and try again." }, 
+           { status: 429 }
+         );
+      }
+      
+      throw aiError; // Rethrow other errors
+    }
+
   } catch (error: any) {
-    console.error('Gemini Error:', error);
+    console.error("Server Error:", error);
     return NextResponse.json(
-      { error: error.message || 'Failed to optimize prompt' },
+      { error: "Failed to optimize prompt. Please try again." }, 
       { status: 500 }
     );
   }
