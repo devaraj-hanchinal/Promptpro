@@ -3,37 +3,31 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    // 1. Validate Setup
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.error("Server Error: Missing GEMINI_API_KEY");
       return NextResponse.json(
-        { error: "Configuration Error: GEMINI_API_KEY is missing in Vercel." }, 
+        { error: "Configuration Error: GEMINI_API_KEY is missing." }, 
         { status: 500 }
       );
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // 2. Parse Request
     const body = await req.json();
-    const { prompt, style, model } = body;
+    const { prompt, style } = body; // Removed 'model' from input to force our choice
 
     if (!prompt) {
-      return NextResponse.json({ error: "Prompt cannot be empty" }, { status: 400 });
+      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    // 3. Configure Model (Using Flash for better stability)
-    // We use gemini-1.5-flash as it is the current standard for free tier speed
-    const aiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // USE "gemini-pro" -> The most stable, standard model
+    const aiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     const systemInstruction = `
       You are an expert Prompt Engineer. Optimize the following prompt to be clear, 
-      effective, and ${style || "detailed"}. The target AI model is ${model || "general"}.
+      effective, and ${style || "detailed"}. 
       Return ONLY the optimized prompt text. No explanations.
     `;
 
-    // 4. Generate Content with explicit error handling
     try {
       const result = await aiModel.generateContent(`${systemInstruction}\n\nUser Prompt: "${prompt}"`);
       const response = await result.response;
@@ -43,18 +37,24 @@ export async function POST(req: Request) {
 
     } catch (aiError: any) {
       console.error("Gemini AI API Error:", aiError);
-      
-      // Return the ACTUAL error message to the frontend for debugging
-      const errorMessage = aiError?.message || "Unknown AI Error";
-      
+      const errorMessage = aiError?.message || "Unknown error";
+
+      // Handle Rate Limits (429)
       if (errorMessage.includes("429") || errorMessage.includes("Quota")) {
          return NextResponse.json(
-           { error: "Rate Limit Exceeded. Please wait 1-2 minutes." }, 
+           { error: "Server Busy (Rate Limit). Please wait 1 minute and try again." }, 
            { status: 429 }
          );
       }
       
-      // Pass the real error string so we can see it
+      // Handle Model Not Found (404)
+      if (errorMessage.includes("404") || errorMessage.includes("not found")) {
+         return NextResponse.json(
+           { error: "Model Error: Please run 'npm install @google/generative-ai@latest' in your terminal." }, 
+           { status: 500 }
+         );
+      }
+
       return NextResponse.json(
         { error: `Google API Error: ${errorMessage}` }, 
         { status: 500 }
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     }
 
   } catch (error: any) {
-    console.error("Critical Server Error:", error);
+    console.error("Server Error:", error);
     return NextResponse.json(
       { error: `Server Error: ${error.message}` }, 
       { status: 500 }
