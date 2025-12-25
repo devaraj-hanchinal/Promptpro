@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
     // NOW SAFE TO USE: gemini-1.5-flash
     // (Because you successfully updated the SDK!)
-    const aiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const aiModel = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
     const systemInstruction = `
       You are an expert Prompt Engineer. Optimize the following prompt to be clear, 
