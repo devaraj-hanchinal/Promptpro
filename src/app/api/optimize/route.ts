@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
     // 3. Configure Model (Using Flash for better stability)
     // We use gemini-1.5-flash as it is the current standard for free tier speed
-    const aiModel = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    const aiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const systemInstruction = `
       You are an expert Prompt Engineer. Optimize the following prompt to be clear, 
