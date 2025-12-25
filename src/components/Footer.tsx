@@ -44,8 +44,9 @@ export default function Footer() {
           </div>
         </div>
         
-        <div className="border-t border-gray-100 dark:border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-gray-400">
+        {/* CHANGED SECTION: Center alignment applied here */}
+        <div className="border-t border-gray-100 dark:border-gray-800 pt-8 flex flex-col items-center justify-center">
+          <p className="text-sm text-gray-400 text-center">
             © {new Date().getFullYear()} Prompt Pro. All rights reserved.
           </p>
         </div>
