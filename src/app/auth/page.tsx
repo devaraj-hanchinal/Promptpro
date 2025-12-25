@@ -1,80 +1,113 @@
 "use client";
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { getAppwriteAccount, ID } from "@/lib/appwrite";
-import { Wand2, Loader2, ArrowLeft, Mail, Lock, User, Eye, EyeOff, CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
+import { Wand2, Loader2, ArrowLeft, Check, Star, Mail, Lock, User, Eye, EyeOff, Zap, ShieldCheck, ArrowRight } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 function AuthContent() {
-  // STATES
-  const [view, setView] = useState<'checkEmail' | 'signIn' | 'signUp'>('checkEmail');
+  const [view, setView] = useState<'signIn' | 'signUp' | 'magicSent' | 'setPassword'>('signIn');
   const [isLoading, setIsLoading] = useState(false);
   
-  // FORM DATA
+  // Form Fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const userId = searchParams.get('userId');
+  const secret = searchParams.get('secret');
 
-  // VALIDATION
+  const { toast } = useToast();
+  const router = useRouter();
+
+  // Password Logic
   const hasMinLength = password.length >= 8;
   const hasNumber = /\d/.test(password);
 
+  // 1. HANDLE MAGIC LINK RETURN
+  useEffect(() => {
+    const handleMagicLink = async () => {
+      if (userId && secret) {
+        setIsLoading(true);
+        try {
+          const account = getAppwriteAccount();
+          await account.updateMagicURLSession(userId, secret);
+          toast({ title: "Email Verified!", description: "Please secure your account." });
+          setView('setPassword');
+        } catch (error: any) {
+          console.error(error);
+          toast({ variant: "destructive", title: "Link Invalid", description: "This link has expired." });
+          setView('signIn');
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    handleMagicLink();
+  }, [userId, secret]);
+
+  // 2. FORM SUBMISSION
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    const account = getAppwriteAccount();
-
     try {
-      // --- PHASE 1: EMAIL CHECK (UI Transition Only) ---
-      if (view === 'checkEmail') {
-        // We simulate a check by just moving to Sign In. 
-        // If they don't exist, the Login step will catch it and redirect.
-        setIsLoading(false);
-        setView('signIn');
-        return;
-      }
+      const account = getAppwriteAccount();
 
-      // --- PHASE 2: SIGN IN ---
+      // --- FLOW A: SIGN IN ---
       if (view === 'signIn') {
         try {
           await account.createEmailPasswordSession(email, password);
-          toast({ title: "Welcome back!", description: "Accessing your dashboard..." });
+          toast({ title: "Welcome back!", description: "Logged in successfully." });
           window.location.href = '/';
-        } catch (error: any) {
-          console.log("Login failed", error);
+        } catch (loginError: any) {
+          // SMART REDIRECT: If login fails, assume new user -> Switch to Sign Up
+          console.log("Login failed, suggesting signup...", loginError);
           
-          // SMART REDIRECT: If login fails, assume user might be new
-          // We switch to Sign Up mode automatically
           toast({ 
-            title: "Account not found (or wrong password)", 
-            description: "We switched you to Sign Up. Create an account now!",
-            duration: 5000 
+            title: "Account not found?", 
+            description: "We've switched you to Sign Up so you can create one.",
+            duration: 5000
           });
-          setView('signUp');
+          
+          setView('signUp'); // <--- The Redirect Logic
+          // We keep the 'email' state so they don't have to retype it
         }
       }
 
-      // --- PHASE 3: SIGN UP ---
-      if (view === 'signUp') {
-        if (!hasMinLength || !hasNumber) throw new Error("Password must be 8+ chars & include a number.");
+      // --- FLOW B: SIGN UP (Send Link) ---
+      else if (view === 'signUp') {
+        localStorage.setItem('temp_signup_name', name);
+        const redirectUrl = `${window.location.origin}/auth`;
         
-        // 1. Create
-        await account.create(ID.unique(), email, password, name);
-        // 2. Login
-        await account.createEmailPasswordSession(email, password);
-        // 3. Verify
-        const verifyUrl = `${window.location.origin}/verify`; 
-        await account.createVerification(verifyUrl);
+        await account.createMagicURLToken(ID.unique(), email, redirectUrl);
+        
+        setView('magicSent');
+        toast({ title: "Verification Sent!", description: "Check your email inbox." });
+      }
 
-        toast({ title: "Account Created!", description: "Verification link sent to your email." });
+      // --- FLOW C: SET PASSWORD ---
+      else if (view === 'setPassword') {
+        if (!hasMinLength || !hasNumber) throw new Error("Password needs 8 chars + 1 number.");
+
+        const savedName = localStorage.getItem('temp_signup_name');
+        const finalName = name || savedName;
+
+        await account.updatePassword(password);
+        if (finalName) {
+            await account.updateName(finalName);
+            localStorage.removeItem('temp_signup_name');
+        }
+
+        toast({ title: "All Set!", description: "Welcome to Prompt Pro." });
         window.location.href = '/';
       }
 
@@ -89,202 +122,221 @@ function AuthContent() {
   return (
     <div className="min-h-screen w-full flex bg-white dark:bg-gray-900">
       
-      {/* --- LEFT SIDE: ATTRACTIVE VISUALS --- */}
-      <div className="hidden lg:flex w-1/2 relative bg-slate-950 items-center justify-center overflow-hidden p-12">
+      {/* --- LEFT SIDE: PROFESSIONAL BRANDING --- */}
+      <div className="hidden lg:flex w-1/2 relative overflow-hidden bg-[#0F172A] text-white">
+        {/* Background Gradients */}
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-violet-600/30 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] translate-y-1/2 -translate-x-1/2" />
         
-        {/* Abstract Background */}
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-violet-600/30 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-indigo-600/30 rounded-full blur-[120px]" />
-        
-        {/* Content Container */}
-        <div className="relative z-10 w-full max-w-lg">
-          
+        <div className="relative z-10 flex flex-col justify-between w-full h-full p-12">
           {/* Logo */}
-          <div className="flex items-center gap-3 mb-12">
-             <div className="p-2.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 shadow-xl">
-               <Wand2 className="w-6 h-6 text-violet-300" />
-             </div>
-             <span className="font-bold text-2xl text-white tracking-tight">Prompt Pro</span>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-white/10 backdrop-blur-md rounded-lg border border-white/10">
+               <Wand2 className="w-5 h-5 text-violet-400" />
+            </div>
+            <span className="font-bold text-lg tracking-tight">Prompt Pro</span>
           </div>
 
-          {/* Floating Glass Cards (Before & After) */}
-          <div className="space-y-6 mb-16">
-            {/* Card 1: Bad Prompt */}
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 p-5 rounded-2xl transform translate-x-4 opacity-60 scale-95">
-              <div className="flex gap-3 items-center mb-2">
-                <div className="w-2 h-2 rounded-full bg-red-400" />
-                <p className="text-xs text-red-200 font-mono">BEFORE</p>
+          {/* Main Content */}
+          <div className="space-y-8">
+            <h1 className="text-5xl font-bold leading-[1.15]">
+              Stop struggling with <br/>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">
+                AI Prompts.
+              </span>
+            </h1>
+            
+            {/* Feature Card - Looking "Real" */}
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl max-w-md">
+              <div className="flex items-center gap-3 mb-4 border-b border-white/10 pb-4">
+                <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">
+                  <Wand2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Optimization Complete</p>
+                  <p className="text-xs text-slate-400">Saved 15 minutes of rewriting</p>
+                </div>
               </div>
-              <p className="text-slate-300 text-sm font-medium">"Write a blog about coffee."</p>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <div className="w-1 bg-red-500/50 rounded-full h-auto" />
+                  <p className="text-xs text-slate-400 line-through">"Write a blog about coffee."</p>
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-1 bg-green-500 rounded-full h-auto" />
+                  <p className="text-xs text-slate-200">"Write a comprehensive SEO-optimized blog post about specialized coffee brewing techniques..."</p>
+                </div>
+              </div>
             </div>
 
-            {/* Arrow */}
-            <div className="flex justify-center -my-3 relative z-20">
-               <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-2 rounded-full shadow-lg shadow-violet-500/30">
-                 <ArrowRight className="w-4 h-4 text-white" />
-               </div>
-            </div>
-
-            {/* Card 2: Good Prompt */}
-            <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-2xl shadow-2xl relative">
-              <div className="absolute top-0 right-0 p-3">
-                 <Sparkles className="w-5 h-5 text-yellow-300 fill-yellow-300/20 animate-pulse" />
+            {/* Social Proof */}
+            <div className="flex items-center gap-4">
+              <div className="flex -space-x-3">
+                {[1,2,3,4].map(i => (
+                  <Avatar key={i} className="border-2 border-[#0F172A] w-10 h-10">
+                    <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i}`} />
+                    <AvatarFallback>U{i}</AvatarFallback>
+                  </Avatar>
+                ))}
               </div>
-              <div className="flex gap-3 items-center mb-3">
-                <div className="w-2 h-2 rounded-full bg-green-400" />
-                <p className="text-xs text-green-200 font-mono">OPTIMIZED</p>
+              <div>
+                <div className="flex gap-0.5">
+                  {[1,2,3,4,5].map(i => <Star key={i} className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" />)}
+                </div>
+                <p className="text-sm text-slate-400 mt-0.5">Trusted by <span className="text-white font-medium">12,000+ creators</span></p>
               </div>
-              <p className="text-white text-sm leading-relaxed font-medium">
-                "Write a comprehensive SEO-optimized blog post about the history of coffee beans, targeting coffee enthusiasts..."
-              </p>
             </div>
           </div>
 
-          {/* Value Props */}
-          <div className="grid grid-cols-2 gap-6">
-            {[
-              "10x Faster Generation",
-              "GPT-4 & Claude Ready",
-              "Privacy First",
-              "Secure History"
-            ].map((feature, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-violet-400" />
-                <span className="text-slate-300 text-sm font-medium">{feature}</span>
-              </div>
-            ))}
+          {/* Footer */}
+          <div className="flex gap-6 text-xs text-slate-500 font-medium">
+            <span>© Prompt Pro Inc.</span>
+            <span>Privacy Policy</span>
+            <span>Terms of Service</span>
           </div>
-
         </div>
       </div>
 
-
-      {/* --- RIGHT SIDE: SMART FORM --- */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 relative">
-        <Link href="/" className="absolute top-8 left-8 inline-flex items-center text-sm text-gray-500 hover:text-gray-900 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back
-        </Link>
-
+      {/* --- RIGHT SIDE: AUTH FORM --- */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-[400px] space-y-8">
           
-          <div className="text-center space-y-2">
-             <div className="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                {view === 'signUp' ? <User className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
-             </div>
-             <h2 className="text-3xl font-bold text-gray-900">
-               {view === 'signUp' ? "Create Account" : "Welcome Back"}
-             </h2>
-             <p className="text-gray-500">
-               {view === 'checkEmail' ? "Enter your email to get started." : 
-                view === 'signIn' ? `Login to ${email}` : 
-                "Looks like you're new here!"}
-             </p>
+          {/* Back Link */}
+          {view !== 'magicSent' && (
+             <Link href="/" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
+                <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
+             </Link>
+          )}
+
+          {/* Dynamic Header */}
+          <div className="space-y-1.5">
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+              {view === 'signIn' && "Welcome back"}
+              {view === 'signUp' && "Create an account"}
+              {view === 'magicSent' && "Check your inbox"}
+              {view === 'setPassword' && "Secure your account"}
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400">
+              {view === 'signIn' && "Enter your details to access your history."}
+              {view === 'signUp' && "Start optimizing your prompts for free."}
+              {view === 'magicSent' && `We sent a verification link to ${email}`}
+              {view === 'setPassword' && "Set a password to login easier next time."}
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            
-            {/* NAME FIELD (Only for SignUp) */}
-            {view === 'signUp' && (
-              <div className="space-y-2 animate-in slide-in-from-bottom-2 fade-in duration-300">
-                <Label>Full Name</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <Input 
-                    placeholder="John Doe" 
-                    className="pl-10 h-11 bg-gray-50 border-gray-200" 
-                    value={name} 
-                    onChange={(e) => setName(e.target.value)} 
-                    required 
-                  />
+          {/* --- VIEW: MAGIC LINK SENT --- */}
+          {view === 'magicSent' && (
+            <div className="flex flex-col gap-4 animate-in fade-in zoom-in duration-300">
+              <div className="bg-violet-50 dark:bg-violet-900/20 text-violet-900 dark:text-violet-200 p-4 rounded-xl flex items-start gap-3 border border-violet-100 dark:border-violet-900/50">
+                <div className="p-2 bg-white dark:bg-violet-900 rounded-full shadow-sm">
+                   <Mail className="w-5 h-5 text-violet-600 dark:text-violet-300" />
+                </div>
+                <div className="text-sm pt-1">
+                  <p className="font-semibold">Verification Link Sent</p>
+                  <p className="opacity-90 mt-1">We've sent a magic link to <strong>{email}</strong>. Click it to verify your account.</p>
                 </div>
               </div>
-            )}
-
-            {/* EMAIL FIELD */}
-            <div className="space-y-2">
-              <Label>Email Address</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                <Input 
-                  type="email" 
-                  placeholder="name@work.com" 
-                  className="pl-10 h-11 bg-gray-50 border-gray-200" 
-                  value={email} 
-                  onChange={(e) => setEmail(e.target.value)} 
-                  disabled={view !== 'checkEmail' && view !== 'signUp'} // Lock email during login attempt
-                  required 
-                />
-                {/* Edit Email Button (If locked) */}
-                {view === 'signIn' && (
-                  <button type="button" onClick={() => setView('checkEmail')} className="absolute right-3 top-3.5 text-xs text-violet-600 font-medium hover:underline">
-                    Change
-                  </button>
-                )}
-              </div>
+              <Button variant="outline" onClick={() => setView('signIn')} className="w-full h-11">
+                Back to Sign In
+              </Button>
             </div>
+          )}
 
-            {/* PASSWORD FIELD (SignIn or SignUp) */}
-            {view !== 'checkEmail' && (
-              <div className="space-y-2 animate-in slide-in-from-bottom-2 fade-in duration-300">
-                <div className="flex justify-between items-center">
-                   <Label>Password</Label>
-                   {view === 'signIn' && <span className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer">Forgot?</span>}
+          {/* --- VIEW: FORMS --- */}
+          {view !== 'magicSent' && (
+            <form onSubmit={handleSubmit} className="space-y-5 animate-in slide-in-from-right-4 duration-500">
+              
+              {/* Name Input (SignUp or SetPassword only) */}
+              {(view === 'signUp' || view === 'setPassword') && (
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                    <Input id="name" placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} className="pl-10 h-11 bg-gray-50 dark:bg-gray-800" required={view === 'signUp'} />
+                  </div>
                 </div>
-                <div className="relative">
-                  <Input 
-                    type={showPassword ? "text" : "password"} 
-                    placeholder="••••••••" 
-                    className="pl-10 pr-10 h-11 bg-gray-50 border-gray-200" 
-                    value={password} 
-                    onChange={(e) => setPassword(e.target.value)} 
-                    required 
-                  />
-                  <Lock className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                
-                {/* Strength Meter (SignUp Only) */}
-                {view === 'signUp' && (
-                   <div className="flex gap-3 mt-2">
-                     <div className={`flex items-center gap-1 text-[11px] font-medium ${hasMinLength ? 'text-green-600' : 'text-gray-400'}`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${hasMinLength ? 'bg-green-500' : 'bg-gray-300'}`} /> 8+ Chars
-                     </div>
-                     <div className={`flex items-center gap-1 text-[11px] font-medium ${hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${hasNumber ? 'bg-green-500' : 'bg-gray-300'}`} /> Number
-                     </div>
-                   </div>
-                )}
-              </div>
-            )}
-
-            <Button type="submit" className="w-full h-12 text-base font-medium bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg shadow-indigo-500/20" disabled={isLoading}>
-              {isLoading ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
-              ) : (
-                view === 'checkEmail' ? "Continue" : 
-                view === 'signUp' ? "Create Account" : 
-                "Sign In"
               )}
-            </Button>
-            
-          </form>
 
-          {/* Footer Text */}
-          <p className="text-center text-xs text-gray-400 mt-6">
-            By continuing, you agree to our Terms of Service <br/> and Privacy Policy.
-          </p>
+              {/* Email Input (SignIn or SignUp) */}
+              {(view === 'signIn' || view === 'signUp') && (
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                    <Input id="email" type="email" placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10 h-11 bg-gray-50 dark:bg-gray-800" />
+                  </div>
+                </div>
+              )}
+
+              {/* Password Input (SignIn or SetPassword) */}
+              {(view === 'signIn' || view === 'setPassword') && (
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                    <Input 
+                      id="password" 
+                      type={showPassword ? "text" : "password"} 
+                      placeholder="••••••••" 
+                      value={password} 
+                      onChange={(e) => setPassword(e.target.value)} 
+                      required 
+                      className="pl-10 h-11 pr-10 bg-gray-50 dark:bg-gray-800" 
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 focus:outline-none">
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  {/* Password Checks (SetPassword Only) */}
+                  {view === 'setPassword' && (
+                    <div className="flex gap-4 mt-2">
+                       <div className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${hasMinLength ? 'text-green-600' : 'text-gray-400'}`}>
+                         <div className={`w-1.5 h-1.5 rounded-full ${hasMinLength ? 'bg-green-600' : 'bg-gray-300'}`} /> 8+ chars
+                       </div>
+                       <div className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
+                         <div className={`w-1.5 h-1.5 rounded-full ${hasNumber ? 'bg-green-600' : 'bg-gray-300'}`} /> Number
+                       </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button type="submit" className="w-full h-11 text-base font-medium bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/20 transition-all hover:scale-[1.02]" disabled={isLoading}>
+                {isLoading ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
+                ) : (
+                  view === 'signIn' ? <span className="flex items-center">Sign In <ArrowRight className="ml-2 w-4 h-4" /></span> : 
+                  view === 'signUp' ? "Verify Email" : 
+                  "Create Account"
+                )}
+              </Button>
+            </form>
+          )}
+
+          {/* Toggle Link */}
+          {view !== 'setPassword' && view !== 'magicSent' && (
+            <div className="mt-6 text-center text-sm">
+              <span className="text-gray-500">
+                {view === 'signUp' ? "Already have an account? " : "New to Prompt Pro? " }
+              </span>
+              <button 
+                onClick={() => setView(view === 'signUp' ? 'signIn' : 'signUp')} 
+                className="font-semibold text-violet-600 hover:text-violet-700 hover:underline transition-all"
+              >
+                {view === 'signUp' ? "Sign In" : "Create Account"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
-
     </div>
   );
 }
 
 export default function AuthPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-violet-600" /></div>}>
       <AuthContent />
     </Suspense>
   );
