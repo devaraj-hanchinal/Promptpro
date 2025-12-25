@@ -13,14 +13,15 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const body = await req.json();
-    const { prompt, style } = body; // Removed 'model' from input to force our choice
+    const { prompt, style } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    // USE "gemini-pro" -> The most stable, standard model
-    const aiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+    // NOW SAFE TO USE: gemini-1.5-flash
+    // (Because you successfully updated the SDK!)
+    const aiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const systemInstruction = `
       You are an expert Prompt Engineer. Optimize the following prompt to be clear, 
@@ -39,22 +40,13 @@ export async function POST(req: Request) {
       console.error("Gemini AI API Error:", aiError);
       const errorMessage = aiError?.message || "Unknown error";
 
-      // Handle Rate Limits (429)
       if (errorMessage.includes("429") || errorMessage.includes("Quota")) {
          return NextResponse.json(
-           { error: "Server Busy (Rate Limit). Please wait 1 minute and try again." }, 
+           { error: "Daily Limit Reached. Please try again tomorrow." }, 
            { status: 429 }
          );
       }
       
-      // Handle Model Not Found (404)
-      if (errorMessage.includes("404") || errorMessage.includes("not found")) {
-         return NextResponse.json(
-           { error: "Model Error: Please run 'npm install @google/generative-ai@latest' in your terminal." }, 
-           { status: 500 }
-         );
-      }
-
       return NextResponse.json(
         { error: `Google API Error: ${errorMessage}` }, 
         { status: 500 }
