@@ -2,13 +2,24 @@
 
 import { Client, Account, Databases, ID } from "appwrite";
 
-const APPWRITE_ENDPOINT = "https://nyc.cloud.appwrite.io/v1";
-const APPWRITE_PROJECT_ID = "6941561a0031b0bf7843"; 
+/**
+ * Must be configured in Vercel Environment variables:
+ * NEXT_PUBLIC_APPWRITE_ENDPOINT
+ * NEXT_PUBLIC_APPWRITE_PROJECT_ID
+ */
 
+const APPWRITE_ENDPOINT =
+  process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || "https://nyc.cloud.appwrite.io/v1";
+
+const APPWRITE_PROJECT_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || "6941561a0031b0bf7843";
+
+// Lazy-loaded instances (singleton pattern)
 let client: Client | null = null;
-let account: Account | null = null;
-let databases: Databases | null = null;
+let accountInstance: Account | null = null;
+let databasesInstance: Databases | null = null;
 
+// Init Appwrite Client
 export function getAppwriteClient() {
   if (!client) {
     client = new Client()
@@ -18,30 +29,36 @@ export function getAppwriteClient() {
   return client;
 }
 
+// Get Account Instance
 export function getAppwriteAccount() {
-  const client = getAppwriteClient();
-  if (!account) {
-    account = new Account(client);
+  if (!accountInstance) {
+    accountInstance = new Account(getAppwriteClient());
   }
-  return account;
+  return accountInstance;
 }
 
+// Get Databases Instance
 export function getAppwriteDatabases() {
-  const client = getAppwriteClient();
-  if (!databases) {
-    databases = new Databases(client);
+  if (!databasesInstance) {
+    databasesInstance = new Databases(getAppwriteClient());
   }
-  return databases;
+  return databasesInstance;
 }
 
-// --- THIS IS THE MISSING PIECE ---
+// 🔥 EXPORT these for easy import everywhere:
+export const account = getAppwriteAccount();
+export const databases = getAppwriteDatabases();
+export const appwriteClient = getAppwriteClient();
+
+// Useful typings
 export interface AppwriteUser {
-    $id: string;
-    name: string;
-    email: string;
-    emailVerification: boolean;
-    status: boolean;
-    prefs: Record<string, any>;
+  $id: string;
+  name: string;
+  email: string;
+  emailVerification: boolean;
+  status: boolean;
+  prefs: Record<string, any>;
 }
 
 export { ID };
+
