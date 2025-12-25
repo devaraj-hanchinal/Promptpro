@@ -19,7 +19,6 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   
   const { toast } = useToast();
-  const router = useRouter();
 
   // Validation Logic
   const hasMinLength = password.length >= 8;
@@ -44,24 +43,21 @@ export default function AuthPage() {
         // 3. Create Session (Log In)
         await account.createEmailPasswordSession(email, password);
 
-        // 4. Trigger Verification (WITH DEBUGGING)
+        // 4. Trigger Verification Link
         try {
-          // Get the current URL (e.g., https://promptpro.dev or http://localhost:3000)
-          const origin = window.location.origin; 
-          const verifyUrl = `${origin}/verify`;
-          
-          console.log("Attempting to send verification email to:", verifyUrl);
+          // Points to your /verify page dynamically
+          const verifyUrl = `${window.location.origin}/verify`; 
           
           await account.createVerification(verifyUrl);
           
           toast({ 
-            title: "Account Created & Email Sent!", 
-            description: "Please check your inbox (and spam) to verify." 
+            title: "Account Created!", 
+            description: "We sent a verification link to your email." 
           });
         } catch (verifyError: any) {
           console.error("Verification Failed:", verifyError);
-          // SHOW THE EXACT ERROR TO USER
-          alert(`Email Verification Failed: ${verifyError.message}`);
+          // Don't block sign up if email fails, just warn
+          toast({ variant: "destructive", title: "Email Error", description: verifyError.message });
         }
 
       } else {
@@ -178,10 +174,9 @@ export default function AuthPage() {
                 </button>
               </div>
 
-              {/* PROFESSIONAL PASSWORD STRENGTH CHECKLIST */}
+              {/* PASSWORD STRENGTH CHECKLIST */}
               {isSignUp && (
                 <div className="grid grid-cols-2 gap-2 mt-3">
-                   {/* Min Length Indicator */}
                    <div className={`flex items-center gap-2 text-xs font-medium transition-all duration-300 ${hasMinLength ? 'text-green-600' : 'text-gray-400'}`}>
                      <div className={`flex items-center justify-center w-4 h-4 rounded-full border transition-all duration-300 ${hasMinLength ? 'bg-green-100 border-green-500' : 'border-gray-300'}`}>
                         {hasMinLength ? <Check className="w-2.5 h-2.5 text-green-600" /> : <Circle className="w-1.5 h-1.5 fill-gray-300 text-transparent" />}
@@ -189,7 +184,6 @@ export default function AuthPage() {
                      <span>At least 8 characters</span>
                    </div>
 
-                   {/* Number Indicator */}
                    <div className={`flex items-center gap-2 text-xs font-medium transition-all duration-300 ${hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
                      <div className={`flex items-center justify-center w-4 h-4 rounded-full border transition-all duration-300 ${hasNumber ? 'bg-green-100 border-green-500' : 'border-gray-300'}`}>
                         {hasNumber ? <Check className="w-2.5 h-2.5 text-green-600" /> : <Circle className="w-1.5 h-1.5 fill-gray-300 text-transparent" />}
