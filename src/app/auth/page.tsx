@@ -33,29 +33,44 @@ export default function AuthPage() {
       const account = getAppwriteAccount();
 
       if (isSignUp) {
+        // 1. Validate Password
         if (!hasMinLength || !hasNumber) {
           throw new Error("Please meet all password requirements.");
         }
 
-        // 1. Create Account
+        // 2. Create Account
         await account.create(ID.unique(), email, password, name);
         
-        // 2. Create Session
+        // 3. Create Session (Log In)
         await account.createEmailPasswordSession(email, password);
 
-        // 3. Verify
-        const verifyUrl = `${window.location.origin}/verify`; 
-        await account.createVerification(verifyUrl);
+        // 4. Trigger Verification (WITH DEBUGGING)
+        try {
+          // Get the current URL (e.g., https://promptpro.dev or http://localhost:3000)
+          const origin = window.location.origin; 
+          const verifyUrl = `${origin}/verify`;
+          
+          console.log("Attempting to send verification email to:", verifyUrl);
+          
+          await account.createVerification(verifyUrl);
+          
+          toast({ 
+            title: "Account Created & Email Sent!", 
+            description: "Please check your inbox (and spam) to verify." 
+          });
+        } catch (verifyError: any) {
+          console.error("Verification Failed:", verifyError);
+          // SHOW THE EXACT ERROR TO USER
+          alert(`Email Verification Failed: ${verifyError.message}`);
+        }
 
-        toast({ 
-          title: "Account created!", 
-          description: "Please check your email to verify your account." 
-        });
       } else {
+        // Login Logic
         await account.createEmailPasswordSession(email, password);
         toast({ title: "Welcome back!", description: "You are now logged in." });
       }
 
+      // Redirect to Home
       window.location.href = '/'; 
 
     } catch (error: any) {
@@ -72,7 +87,7 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen w-full flex">
-      {/* LEFT SIDE - Branding (Unchanged) */}
+      {/* LEFT SIDE - Branding */}
       <div className="hidden lg:flex w-1/2 bg-slate-900 relative items-center justify-center overflow-hidden">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-violet-600/20 rounded-full blur-[100px]" />
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[100px]" />
@@ -157,7 +172,7 @@ export default function AuthPage() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
-                  tabIndex={-1} // Prevent tabbing to this button
+                  tabIndex={-1} 
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
