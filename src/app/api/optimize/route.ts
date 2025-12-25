@@ -1,30 +1,39 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-
 export async function POST(req: Request) {
   try {
-    const { prompt, style, model } = await req.json();
-
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json({ error: "API Key is missing in Vercel Settings" }, { status: 500 });
+    // 1. Validate Setup
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("Server Error: Missing GEMINI_API_KEY");
+      return NextResponse.json(
+        { error: "Configuration Error: GEMINI_API_KEY is missing in Vercel." }, 
+        { status: 500 }
+      );
     }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // 2. Parse Request
+    const body = await req.json();
+    const { prompt, style, model } = body;
 
     if (!prompt) {
-      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
+      return NextResponse.json({ error: "Prompt cannot be empty" }, { status: 400 });
     }
 
-    // Use 'gemini-pro' model
-    const aiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+    // 3. Configure Model (Using Flash for better stability)
+    // We use gemini-1.5-flash as it is the current standard for free tier speed
+    const aiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const systemInstruction = `
       You are an expert Prompt Engineer. Optimize the following prompt to be clear, 
-      effective, and ${style}. The target AI model is ${model}.
+      effective, and ${style || "detailed"}. The target AI model is ${model || "general"}.
       Return ONLY the optimized prompt text. No explanations.
     `;
 
+    // 4. Generate Content with explicit error handling
     try {
       const result = await aiModel.generateContent(`${systemInstruction}\n\nUser Prompt: "${prompt}"`);
       const response = await result.response;
@@ -33,27 +42,29 @@ export async function POST(req: Request) {
       return NextResponse.json({ optimizedPrompt });
 
     } catch (aiError: any) {
-      console.error("Gemini API Error:", aiError);
+      console.error("Gemini AI API Error:", aiError);
       
-      // CATCH RATE LIMIT ERRORS SPECIFICALLY
-      if (
-        aiError.message?.includes("429") || 
-        aiError.message?.includes("Quota") || 
-        aiError.message?.includes("Too Many Requests")
-      ) {
+      // Return the ACTUAL error message to the frontend for debugging
+      const errorMessage = aiError?.message || "Unknown AI Error";
+      
+      if (errorMessage.includes("429") || errorMessage.includes("Quota")) {
          return NextResponse.json(
-           { error: "Speed Limit Reached. Please wait 1 minute." }, 
+           { error: "Rate Limit Exceeded. Please wait 1-2 minutes." }, 
            { status: 429 }
          );
       }
       
-      throw aiError; // Throw other errors to the general catch block
+      // Pass the real error string so we can see it
+      return NextResponse.json(
+        { error: `Google API Error: ${errorMessage}` }, 
+        { status: 500 }
+      );
     }
 
   } catch (error: any) {
-    console.error("Server Error:", error);
+    console.error("Critical Server Error:", error);
     return NextResponse.json(
-      { error: "Failed to optimize prompt. Please try again." }, 
+      { error: `Server Error: ${error.message}` }, 
       { status: 500 }
     );
   }
