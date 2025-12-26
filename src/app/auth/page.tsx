@@ -161,29 +161,33 @@ else if (view === "signUp") {
 
 
       /** ------ OTP VERIFY ------ */
-      else if (view === "otpVerify") {
-        const userId = localStorage.getItem("temp_signup_uid");
+      /* ---------- OTP VERIFY ---------- */
+else if (view === "otpVerify") {
+  try {
+    const account = getAppwriteAccount();
+    await account.createEmailSession(userId!, otpCode); // <-- FIXED
 
-        if (!userId) throw new Error("Sign-up session missing. Try again.");
-        if (otpCode.length !== 6)
-          return toast({ variant: "destructive", title: "Invalid OTP", description: "Enter 6 digits." });
+    const storedName = localStorage.getItem("temp_signup_name");
+    if (storedName) {
+      await account.updateName(storedName);
+      localStorage.removeItem("temp_signup_name");
+    }
 
-        try {
-          await account.updateEmailSession(userId, otpCode);
+    toast({
+      title: "Email verified!",
+      description: "Welcome to Prompt Pro — your account is ready.",
+    });
 
-          const storedName = localStorage.getItem("temp_signup_name");
-          if (storedName) setName(storedName);
-
-          toast({ title: "OTP Verified!", description: "Now create a password." });
-          setView("setPassword");
-        } catch {
-          toast({
-            variant: "destructive",
-            title: "Invalid OTP",
-            description: "Try again or use the link in your email."
-          });
-        }
-      }
+    window.location.href = "/";
+  } catch (err: any) {
+    toast({
+      variant: "destructive",
+      title: "Incorrect code",
+      description: "Check your email and try again.",
+    });
+  }
+}
+}
 
       /** ------ SET PASSWORD ------ */
       else if (view === "setPassword") {
