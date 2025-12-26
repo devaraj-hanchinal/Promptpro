@@ -2,310 +2,249 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { getAppwriteAccount, ID } from "@/lib/appwrite";
-import { Wand2, Mail, Lock, User, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, Mail, Lock, User } from "lucide-react";
 
 function AuthContent() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [step, setStep] = useState<
-    "email" | "signin" | "signup" | "otp" | "password"
-  >("email");
+  /* ---------------------- UI STEPS ---------------------- */
+  const [step, setStep] = useState<"email" | "otp" | "password">("email");
 
   const [email, setEmail] = useState("");
-  const [uid, setUid] = useState("");
-  const [name, setName] = useState("");
   const [otpCode, setOtpCode] = useState("");
+  const [uid, setUid] = useState("");
+
+  const [name, setName] = useState("");
+  const [userExists, setUserExists] = useState<boolean | null>(null);
 
   const [password, setPassword] = useState("");
-  const [strength, setStrength] = useState(0);
+  const [progress, setProgress] = useState(0);
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // resend OTP timer
-  const [resendTimer, setResendTimer] = useState(30);
-  const [isResendDisabled, setIsResendDisabled] = useState(true);
-
-  // strength meter
+  /* ---------------- Password Strength Progress ---------------- */
   useEffect(() => {
-    let score = 0;
-    if (password.length >= 8) score++;
-    if (/\d/.test(password)) score++;
-    if (/[A-Z]/.test(password)) score++;
-    if (/[^A-Za-z0-9]/.test(password)) score++;
-    setStrength(score);
+    let p = 0;
+    if (password.length >= 8) p += 25;
+    if (/[A-Z]/.test(password)) p += 25;
+    if (/[0-9]/.test(password)) p += 25;
+    if (/[^A-Za-z0-9]/.test(password)) p += 25;
+    setProgress(p);
   }, [password]);
 
-  // resend timer effect
-  useEffect(() => {
-    if (!isResendDisabled) return;
-    if (resendTimer === 0) {
-      setIsResendDisabled(false);
-      return;
-    }
-    const interval = setInterval(() => setResendTimer((p) => p - 1), 1000);
-    return () => clearInterval(interval);
-  }, [isResendDisabled, resendTimer]);
-
-  /* ---------------------------------------
-     STEP 1: CHECK EMAIL EXISTS
-  --------------------------------------- */
-  const handleCheckEmail = async (e: React.FormEvent) => {
+  /* --------------------- STEP 1: CHECK EMAIL ---------------------- */
+  const handleEmailCheck = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.includes("@")) return;
+
     setIsLoading(true);
-
+    const account = getAppwriteAccount();
     try {
-      const account = getAppwriteAccount();
-      await account.createSession(email, "wrong-pass"); // always fails; used for exists check
-      setStep("signin");
-    } catch (err: any) {
-      if (err.code === 401) {
-        setStep("signin");
-      } else {
-        setStep("signup");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /* ---------------------------------------
-     SIGN IN (PASSWORD)
-  --------------------------------------- */
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      const account = getAppwriteAccount();
-      await account.createEmailPasswordSession(email, password);
+      await account.get();
+      // if logged in already
       router.push("/");
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Login failed" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /* ---------------------------------------
-     SIGN UP → CREATE USER → SEND OTP
-  --------------------------------------- */
-  const handleSignUpStart = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+    } catch {}
 
     try {
-      const newUserId = ID.unique();
-      const account = getAppwriteAccount();
+      await account.createEmailPasswordSession(email, "invalid");
+    } catch {
+      try {
+        const existsTest = await account.createEmailPasswordSession(email, "invalid2");
+        console.log(existsTest);
+      } catch (err: any) {
+        if (err?.code === 401) setUserExists(true);
+        else setUserExists(false);
+      }
+    }
 
-      await account.create(newUserId, email, "Temp@1234", name);
+    setIsLoading(false);
 
-      setUid(newUserId);
+    if (userExists === null) return;
 
-      await account.createEmailToken({ userId: newUserId, email });
-
+    if (userExists) {
+      // SIGN IN → ask for password
+      setStep("password");
+    } else {
+      // SIGN UP → ask for name then send OTP
       setStep("otp");
-      setResendTimer(30);
-      setIsResendDisabled(true);
-
-      toast({ title: "OTP Sent", description: "Check your inbox" });
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Signup failed" });
-    } finally {
-      setIsLoading(false);
+      try {
+        const account = getAppwriteAccount();
+        await account.create(ID.unique(), email, "TempPass@123", name || "User");
+        const tok = await account.createEmailToken(email);
+        setUid(tok.userId);
+        toast({ title: "OTP Sent!", description: "Check your email inbox." });
+      } catch {
+        toast({ variant: "destructive", title: "Error creating account" });
+      }
     }
   };
 
-  /* ---------------------------------------
-     VERIFY OTP → PROCEED TO PASSWORD
-  --------------------------------------- */
+  /* --------------------- STEP 2: VERIFY OTP ---------------------- */
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    if (!otpCode) return;
 
+    setIsLoading(true);
     try {
       const account = getAppwriteAccount();
-      await account.createEmailSession({ userId: uid, secret: otpCode });
+      await account.createSession(uid, otpCode); // <- correct OTP verification
       setStep("password");
-    } catch (err: any) {
+    } catch {
       toast({ variant: "destructive", title: "Invalid OTP" });
-    } finally {
-      setIsLoading(false);
     }
+    setIsLoading(false);
   };
 
-  /* ---------------------------------------
-     SET PASSWORD → UPDATE EMAIL → LOGIN
-  --------------------------------------- */
+  /* --------------------- STEP 3: SET PASSWORD ---------------------- */
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    if (progress < 50) return toast({ title: "Weak Password", description: "Add more complexity." });
 
+    setIsLoading(true);
     try {
       const account = getAppwriteAccount();
-
       await account.updatePassword(password);
-
-      await account.updateEmail({ email, password });
-
       await account.createEmailPasswordSession(email, password);
-
       router.push("/");
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Account setup failed" });
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error creating password" });
     }
+    setIsLoading(false);
   };
 
-  /* ---------------------------------------
-       UI COMPONENTS
-  --------------------------------------- */
-
-  const strengthColors = ["bg-red-500", "bg-orange-500", "bg-yellow-500", "bg-green-500"];
-
+  /* --------------------------------------------------
+                      UI
+  ---------------------------------------------------*/
   return (
-    <div className="min-h-screen w-full flex bg-[#0c0c0c] text-gray-100">
-      {/* LEFT SIDE */}
-      <div className="hidden lg:flex w-1/2 flex-col justify-between p-12 border-r border-gray-800">
-        <div className="flex items-center gap-2 text-xl font-semibold">
-          <Wand2 className="text-purple-400" /> Prompt Pro
-        </div>
+    <div className="min-h-screen flex bg-white dark:bg-gray-900">
 
+      {/* -- LEFT SPLIT / HERO -- */}
+      <div className="hidden lg:flex w-1/2 flex-col justify-between bg-[#0F172A] text-white p-12 relative">
         <div>
-          <h1 className="text-5xl font-bold mb-6">
-            Ship prompts like<br />
-            <span className="text-purple-400">a power-user.</span>
+          <h1 className="text-5xl font-bold leading-snug">
+            Level up your
+            <br />
+            <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              Prompting Skills.
+            </span>
           </h1>
-          <p className="text-gray-400 max-w-md">
-            Optimize, refine & manage your AI prompts with blazing speed.
+          <p className="mt-4 text-gray-300 max-w-md">
+            Unlock advanced AI content creation workflows, boost productivity, and automate your creativity.
           </p>
         </div>
 
-        <p className="text-gray-500 text-sm">© Prompt Pro — Linear-inspired UI</p>
+        <div className="text-sm text-gray-400 space-y-1">
+          <p>✓ Trusted by thousands</p>
+          <p>✓ Premium prompt library</p>
+          <p>✓ Real results within weeks</p>
+        </div>
       </div>
 
-      {/* RIGHT SIDE */}
+      {/* -- RIGHT SPLIT / FORM -- */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-10">
-        <div className="w-full max-w-sm space-y-8">
+        <div className="w-full max-w-md space-y-8">
 
-          {/* EMAIL */}
+          {/* --------------------- EMAIL STEP --------------------- */}
           {step === "email" && (
-            <form onSubmit={handleCheckEmail} className="space-y-4">
-              <Label>Email</Label>
-              <Input
-                className="bg-[#1a1a1a] border-gray-700"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <Button className="w-full bg-purple-600 hover:bg-purple-700">
-                {isLoading ? <Loader2 className="animate-spin" /> : <>Continue <ArrowRight /></>}
-              </Button>
-            </form>
-          )}
-
-          {/* SIGN IN */}
-          {step === "signin" && (
-            <form onSubmit={handleSignIn} className="space-y-4">
-              <Label>Password</Label>
-              <Input
-                type="password"
-                className="bg-[#1a1a1a] border-gray-700"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <Button className="w-full bg-purple-600 hover:bg-purple-700">
-                {isLoading ? <Loader2 className="animate-spin" /> : <>Login <ArrowRight /></>}
-              </Button>
-            </form>
-          )}
-
-          {/* SIGN UP */}
-          {step === "signup" && (
-            <form onSubmit={handleSignUpStart} className="space-y-4">
-              <Label>Name</Label>
-              <Input
-                className="bg-[#1a1a1a] border-gray-700"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-              <Button className="w-full bg-purple-600 hover:bg-purple-700">
-                {isLoading ? <Loader2 className="animate-spin" /> : <>Send OTP <ArrowRight /></>}
-              </Button>
-            </form>
-          )}
-
-          {/* OTP */}
-          {step === "otp" && (
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <Label>Enter OTP sent to {email}</Label>
-              <Input
-                className="bg-[#1a1a1a] border-gray-700"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-                required
-              />
-
-              <Button disabled={isResendDisabled} variant="outline"
-                onClick={async () => {
-                  const account = getAppwriteAccount();
-                  await account.createEmailToken({ userId: uid, email });
-                  setResendTimer(30);
-                  setIsResendDisabled(true);
-                }}>
-                {isResendDisabled ? `Resend in ${resendTimer}s` : "Resend OTP"}
-              </Button>
-
-              <Button className="w-full bg-purple-600 hover:bg-purple-700">
-                {isLoading ? <Loader2 className="animate-spin" /> : <>Verify <ArrowRight /></>}
-              </Button>
-            </form>
-          )}
-
-          {/* PASSWORD */}
-          {step === "password" && (
-            <form onSubmit={handleSetPassword} className="space-y-4">
-              <Label>Create password</Label>
-              <Input
-                type="password"
-                className="bg-[#1a1a1a] border-gray-700"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-
-              {/* strength bar */}
-              <div className="flex gap-1 mt-2">
-                {[0, 1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className={`h-1 w-full rounded ${
-                      strength > i ? strengthColors[i] : "bg-gray-700"
-                    }`}
+            <form onSubmit={handleEmailCheck} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Email address</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                  <Input
+                    className="pl-10 h-11"
+                    required
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                   />
-                ))}
+                </div>
               </div>
 
-              <Button className="w-full bg-purple-600 hover:bg-purple-700">
-                {isLoading ? <Loader2 className="animate-spin" /> : <>Finish <ShieldCheck /></>}
+              <Button className="w-full h-11" disabled={isLoading}>
+                {isLoading ? <Loader2 className="animate-spin mr-2" /> : "Continue"}
               </Button>
             </form>
           )}
 
-          <div className="text-center">
-            <Link href="/" className="text-gray-500 hover:text-gray-300 text-xs">
-              Back to home
-            </Link>
-          </div>
+          {/* --------------------- OTP STEP --------------------- */}
+          {step === "otp" && (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                  <Input
+                    className="pl-10 h-11"
+                    placeholder="Your name"
+                    value={name}
+                    required
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Enter OTP sent to {email}</Label>
+                <div className="relative">
+                  <Input
+                    className="h-11"
+                    value={otpCode}
+                    placeholder="123456"
+                    required
+                    onChange={(e) => setOtpCode(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <Button className="w-full h-11" disabled={isLoading}>
+                {isLoading ? <Loader2 className="animate-spin mr-2" /> : "Verify OTP"}
+              </Button>
+
+            </form>
+          )}
+
+          {/* --------------------- PASSWORD STEP --------------------- */}
+          {step === "password" && (
+            <form onSubmit={handleSetPassword} className="space-y-5">
+              <div className="space-y-2">
+                <Label>Create password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                  <Input
+                    type="password"
+                    className="pl-10 h-11"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Strength bar */}
+              <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${progress}%`,
+                    background:
+                      progress < 50 ? "red" : progress < 75 ? "orange" : "green",
+                  }}
+                />
+              </div>
+
+              <Button className="w-full h-11" disabled={isLoading}>
+                {isLoading ? <Loader2 className="animate-spin mr-2" /> : "Finish & Log In"}
+              </Button>
+            </form>
+          )}
         </div>
       </div>
     </div>
@@ -314,11 +253,12 @@ function AuthContent() {
 
 export default function AuthPage() {
   return (
-    <Suspense fallback={<div />}>
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen"><Loader2 className="animate-spin" /></div>}>
       <AuthContent />
     </Suspense>
   );
 }
+
 
 
 
