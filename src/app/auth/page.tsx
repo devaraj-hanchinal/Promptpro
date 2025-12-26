@@ -86,7 +86,10 @@ function AuthContent() {
     try {
       /* -------- SIGNUP -------- */
       if (step === "signup") {
-        const internalPass = ID.unique(); // internal password, never shown to user
+        // Generate internal strong password (never shown to user)
+const internalPass =
+  crypto.randomUUID().replaceAll("-", "") + Math.random().toString(36).slice(-4);
+ // internal password, never shown to user
 
         try {
           await account.create(ID.unique(), email, internalPass, fullName);
