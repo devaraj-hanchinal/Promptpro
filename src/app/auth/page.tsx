@@ -1,177 +1,122 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { getAppwriteAccount, ID } from "@/lib/appwrite";
 import {
-  Wand2, Loader2, ArrowLeft, ArrowRight,
-  Mail, Lock, User, Eye, EyeOff
+  Loader2,
+  ArrowLeft,
+  User,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 function AuthContent() {
-  const [view, setView] = useState<
-    "signIn" | "signUp" | "magicSent" | "otpVerify" | "setPassword"
-  >("signIn");
+  const { toast } = useToast();
+  const router = useRouter();
 
+  const [view, setView] = useState<"signIn" | "signUp" | "verifyOTP" | "setPassword">("signIn");
   const [isLoading, setIsLoading] = useState(false);
 
-  // form fields
+  // Form fields
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const searchParams = useSearchParams();
-  const userId = searchParams.get("userId");
-  const secret = searchParams.get("secret");
-
-  const { toast } = useToast();
-  const router = useRouter();
-
-  // password validation
+  // Password checks
   const hasMinLength = password.length >= 8;
   const hasNumber = /\d/.test(password);
 
-  /* -------------------------------------------------
-      HANDLE MAGIC LINK VERIFICATION
-  ---------------------------------------------------*/
+  // OTP Timer state
+  const [resendTimer, setResendTimer] = useState(60);
+  const [isResendDisabled, setIsResendDisabled] = useState(true);
+
+  /* Countdown Timer */
   useEffect(() => {
-    const handleMagic = async () => {
-      if (userId && secret) {
-        setIsLoading(true);
-        try {
-          const account = getAppwriteAccount();
-          await account.updateMagicURLSession(userId, secret);
+    let interval: NodeJS.Timeout | null = null;
+    if (isResendDisabled && resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    if (resendTimer === 0) {
+      setIsResendDisabled(false);
+    }
+    return () => interval && clearInterval(interval);
+  }, [isResendDisabled, resendTimer]);
 
-          toast({
-            title: "Email Verified!",
-            description: "Now secure your account with a password.",
-          });
-
-          const savedName = localStorage.getItem("temp_signup_name");
-          if (savedName) setName(savedName);
-
-          setView("setPassword");
-        } catch (error: any) {
-          toast({
-            variant: "destructive",
-            title: "Invalid or expired link",
-            description: "Try signing up again.",
-          });
-          setView("signIn");
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-    handleMagic();
-  }, [userId, secret, toast]);
-
-  /* -------------------------------------------------
-                HANDLE SUBMIT FLOWS
-  ---------------------------------------------------*/
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /* ❌ SIGN IN */
+  const handleSignIn = async () => {
     setIsLoading(true);
-
     try {
       const account = getAppwriteAccount();
-
-      /* ---------- SIGN IN (auto redirect to sign up if user not found) ---------- */
-      if (view === "signIn") {
-        try {
-          await account.createEmailPasswordSession(email, password);
-          toast({ title: "Welcome back!", description: "Logged in successfully." });
-          window.location.href = "/";
-        } catch {
-          toast({
-            title: "Account not found",
-            description: "Switched to Sign Up — verify your email to continue.",
-            duration: 6000,
-          });
-          setView("signUp");
-        }
-      }
-
-      /* ---------- SIGN UP (create user + send OTP + send link) ---------- */
-      else if (view === "signUp") {
-        const newUserId = ID.unique();
-        localStorage.setItem("temp_signup_uid", newUserId);
-        localStorage.setItem("temp_signup_name", name);
-
-        const tempPassword = ID.unique(); // temporary password to create user
-        await account.create(newUserId, email, tempPassword, name);
-
-        const redirectUrl = `${window.location.origin}/auth`;
-        await account.createVerification(redirectUrl);   // magic link
-        await account.createEmailToken(newUserId, email); // OTP
-
-        toast({
-          title: "Verify your email",
-          description: "We sent a magic link AND a 6-digit OTP. Use either to continue.",
-          duration: 8000,
-        });
-
-        setView("otpVerify");
-      }
-
-      /* ---------- OTP VERIFY ---------- */
-      /* ---------- OTP VERIFY ---------- */
-else if (view === "otpVerify") {
-  try {
-    const uid = localStorage.getItem("temp_signup_uid");
-    if (!uid) throw new Error("User session expired. Please sign up again.");
-
-    // FIX: correct OTP verification method for Appwrite 1.x
-    await account.createSession(uid, otpCode);
-
-    const storedName = localStorage.getItem("temp_signup_name");
-    if (storedName) {
-      await account.updateName(storedName);
-      localStorage.removeItem("temp_signup_name");
+      await account.createSession(email, password);
+      toast({ title: "Welcome back!", description: "Successfully signed in." });
+      router.push("/");
+    } catch (err) {
+      toast({
+        title: "Account not found?",
+        description: "Continuing to sign up.",
+      });
+      setView("signUp");
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    toast({
-      title: "Email verified via OTP!",
-      description: "Now create a password to secure your account.",
-    });
+  /* 🆕 SIGN UP → SEND OTP */
+  const handleSignup = async () => {
+    setIsLoading(true);
+    try {
+      const account = getAppwriteAccount();
+      const uid = ID.unique();
 
-    setView("setPassword");
-  } catch (err: any) {
-    toast({
-      variant: "destructive",
-      title: "Incorrect OTP",
-      description: "Try again or check your email.",
-    });
-  }
-}
+      await account.create(uid, email, password, name);
+      localStorage.setItem("temp_uid", uid);
+      localStorage.setItem("temp_signup_name", name);
 
+      await account.createEmailToken(uid, email);
 
-      /* ---------- SET PASSWORD ---------- */
-      else if (view === "setPassword") {
-        if (!hasMinLength || !hasNumber)
-          throw new Error("Password must have 8+ characters and include a number.");
+      toast({ title: "OTP Sent!", description: "Check your email." });
+      setIsResendDisabled(true);
+      setResendTimer(60);
+      setView("verifyOTP");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-        await account.updatePassword(password);
+  /* 🔐 VERIFY OTP */
+  const handleVerifyOTP = async () => {
+    setIsLoading(true);
+    try {
+      const account = getAppwriteAccount();
+      const uid = localStorage.getItem("temp_uid");
+      if (!uid) throw new Error("Signup expired. Try again.");
 
-        toast({
-          title: "Account secured!",
-          description: "Please log in.",
-        });
+      await account.createSession(email, otpCode);
+      setView("setPassword");
 
-        window.location.href = "/auth";
-      }
+      toast({
+        title: "Verified",
+        description: "Your email has been confirmed.",
+      });
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Error",
+        title: "Invalid OTP",
         description: err.message,
       });
     } finally {
@@ -179,147 +124,196 @@ else if (view === "otpVerify") {
     }
   };
 
-  /* -------------------------------------------------
-                        UI
-  ---------------------------------------------------*/
+  /* 🔑 SET PASSWORD */
+  const handleSetPassword = async () => {
+    if (!hasMinLength || !hasNumber) return;
 
+    setIsLoading(true);
+    try {
+      const account = getAppwriteAccount();
+
+      await account.updatePassword(password);
+      const savedName = localStorage.getItem("temp_signup_name");
+      if (savedName) {
+        await account.updateName(savedName);
+        localStorage.removeItem("temp_signup_name");
+      }
+
+      toast({ title: "Welcome!", description: "Account ready 🎉" });
+      router.push("/");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /* 🔁 RESEND OTP */
+  const handleResendOTP = async () => {
+    setIsLoading(true);
+    try {
+      const account = getAppwriteAccount();
+      const uid = localStorage.getItem("temp_uid");
+
+      if (!uid) throw new Error("Session expired, signup again.");
+
+      await account.createEmailToken(uid, email);
+      toast({ title: "Sent again", description: "Please check your inbox." });
+
+      setIsResendDisabled(true);
+      setResendTimer(60);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to resend",
+        description: err.message,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /* UI Blocks */
   return (
-    <div className="min-h-screen w-full flex bg-white dark:bg-gray-900">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-white dark:bg-gray-900">
+      <div className="w-full max-w-md space-y-6">
 
-      {/* LEFT SIDE — branding */}
-      <div className="hidden lg:flex w-1/2 bg-[#0F172A] text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-violet-600/30 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] translate-y-1/2 -translate-x-1/2" />
+        {/* Title */}
+        <h2 className="text-2xl font-bold text-center">
+          {view === "signIn" && "Sign In"}
+          {view === "signUp" && "Create Account"}
+          {view === "verifyOTP" && "Verify Email"}
+          {view === "setPassword" && "Set Password"}
+        </h2>
 
-        <div className="relative z-10 flex flex-col justify-between w-full h-full p-12">
-          <div className="flex items-center gap-2">
-            <Wand2 className="w-5 h-5 text-violet-400" />
-            <span className="font-bold text-lg">Prompt Pro</span>
-          </div>
+        {/* Sign In */}
+        {view === "signIn" && (
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSignIn();
+            }}
+          >
+            <Input placeholder="Email" value={email} type="email" required onChange={(e) => setEmail(e.target.value)} />
 
-          <h1 className="text-5xl font-bold leading-[1.15]">
-            Stop struggling with <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">
-              AI Prompts.
-            </span>
-          </h1>
-
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl max-w-md text-sm">
-            "Rewrite this AI prompt better"
-          </div>
-        </div>
-      </div>
-
-      {/* RIGHT SIDE — form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
-        <div className="w-full max-w-[400px] space-y-8">
-
-          {view !== "magicSent" && (
-            <Link
-              href="/"
-              className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
-            </Link>
-          )}
-
-          <div className="space-y-1.5">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-              {view === "signIn" && "Welcome back"}
-              {view === "signUp" && "Create an account"}
-              {view === "otpVerify" && "Verify code"}
-              {view === "setPassword" && "Secure your account"}
-            </h2>
-          </div>
-
-          {/* MAIN FORM */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-
-            {/* NAME */}
-            {(view === "signUp" || view === "setPassword") && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required={view === "signUp"}
-                />
-              </div>
-            )}
-
-            {/* EMAIL */}
-            {(view === "signUp" || view === "signIn") && (
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input type="email" value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-            )}
-
-            {/* OTP */}
-            {view === "otpVerify" && (
-              <div className="space-y-2">
-                <Label>Enter OTP</Label>
-                <Input value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
-                  maxLength={6}
-                  required
-                />
-              </div>
-            )}
-
-            {/* PASSWORD */}
-            {(view === "signIn" || view === "setPassword") && (
-              <div className="space-y-2">
-                <Label>Password</Label>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="absolute right-3 top-3 text-gray-500"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff /> : <Eye />}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* SUBMIT BUTTON */}
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <Loader2 className="mr-2 w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  {view === "signIn" && <>Sign In <ArrowRight className="ml-2 w-4 h-4"/></>}
-                  {view === "signUp" && "Verify Email"}
-                  {view === "otpVerify" && "Verify OTP"}
-                  {view === "setPassword" && "Create Password"}
-                </>
-              )}
-            </Button>
-          </form>
-
-          {/* SWITCH VIEW */}
-          {view !== "setPassword" && view !== "otpVerify" && (
-            <div className="text-sm text-center">
-              {view === "signUp" ? "Already have an account?" : "New to Prompt Pro?"}
-              <button
-                className="font-semibold text-violet-600 ml-1"
-                onClick={() => setView(view === "signUp" ? "signIn" : "signUp")}
+            <div className="relative">
+              <Input
+                placeholder="Password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                required
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <span
+                className="absolute right-3 top-3 cursor-pointer"
+                onClick={() => setShowPassword(!showPassword)}
               >
-                {view === "signUp" ? "Sign In" : "Create Account"}
-              </button>
+                {showPassword ? <EyeOff /> : <Eye />}
+              </span>
             </div>
-          )}
 
-        </div>
+            <Button className="w-full" type="submit" disabled={isLoading}>
+              {isLoading ? <Loader2 className="animate-spin" /> : "Continue"}
+            </Button>
+
+            <p className="text-center text-sm">
+              New here?{" "}
+              <button
+                className="text-violet-600"
+                onClick={() => setView("signUp")}
+                type="button"
+              >
+                Create Account
+              </button>
+            </p>
+          </form>
+        )}
+
+        {/* Signup */}
+        {view === "signUp" && (
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSignup();
+            }}
+          >
+            <Input placeholder="Full Name" required value={name} onChange={(e) => setName(e.target.value)} />
+            <Input placeholder="Email" required value={email} type="email" onChange={(e) => setEmail(e.target.value)} />
+            <Input placeholder="Temporary Password" required type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+
+            <Button className="w-full" type="submit" disabled={isLoading}>
+              {isLoading ? <Loader2 className="animate-spin" /> : "Send OTP"}
+            </Button>
+
+            <p className="text-center text-sm">
+              Already have an account?{" "}
+              <button className="text-violet-600" onClick={() => setView("signIn")} type="button">
+                Sign In
+              </button>
+            </p>
+          </form>
+        )}
+
+        {/* OTP Verify */}
+        {view === "verifyOTP" && (
+          <div className="space-y-4">
+            <Input placeholder="Enter OTP" value={otpCode} maxLength={6} onChange={(e) => setOtpCode(e.target.value)} />
+
+            <Button className="w-full" onClick={handleVerifyOTP} disabled={isLoading}>
+              {isLoading ? <Loader2 className="animate-spin" /> : "Verify"}
+            </Button>
+
+            <div className="text-center text-sm">
+              Didn’t get it?{" "}
+              {isResendDisabled ? (
+                <span className="text-gray-500">Resend in {resendTimer}s</span>
+              ) : (
+                <button className="text-violet-600" onClick={handleResendOTP}>
+                  Resend OTP
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Set Password */}
+        {view === "setPassword" && (
+          <div className="space-y-4">
+            <Label>Password</Label>
+
+            <div className="relative">
+              <Input
+                placeholder="New Password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <span className="absolute right-3 top-3 cursor-pointer" onClick={() => setShowPassword(!showPassword)}>
+                {showPassword ? <EyeOff /> : <Eye />}
+              </span>
+            </div>
+
+            {/* Password rules UI */}
+            <div className="flex gap-4 text-xs">
+              <span className={hasMinLength ? "text-green-600" : "text-gray-400"}>
+                8+ characters
+              </span>
+              <span className={hasNumber ? "text-green-600" : "text-gray-400"}>
+                Contains number
+              </span>
+            </div>
+
+            <Button
+              className="w-full"
+              disabled={!hasMinLength || !hasNumber || isLoading}
+              onClick={handleSetPassword}
+            >
+              {isLoading ? <Loader2 className="animate-spin" /> : "Continue"}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -327,11 +321,7 @@ else if (view === "otpVerify") {
 
 export default function AuthPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
-      </div>
-    }>
+    <Suspense>
       <AuthContent />
     </Suspense>
   );
