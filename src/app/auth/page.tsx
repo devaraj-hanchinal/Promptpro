@@ -10,9 +10,9 @@ import { useToast } from "@/components/ui/use-toast";
 import { getAppwriteAccount, ID } from "@/lib/appwrite";
 import { Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
-/* ─────────────────────────────────────────────── */
-/* PASSWORD STRENGTH LOGIC */
-/* ─────────────────────────────────────────────── */
+/* ----------------------------------------------
+   PASSWORD STRENGTH LOGIC
+---------------------------------------------- */
 const getPasswordStrength = (password: string) => {
   let score = 0;
   if (password.length >= 8) score++;
@@ -31,34 +31,33 @@ const getPasswordStrength = (password: string) => {
   };
 };
 
-/* ─────────────────────────────────────────────── */
-/* MAIN COMPONENT */
-/* ─────────────────────────────────────────────── */
+/* ----------------------------------------------
+   MAIN AUTH CONTENT
+---------------------------------------------- */
 function AuthContent() {
   const [step, setStep] = useState<"signup" | "otp" | "password" | "signin">("signup");
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // Form values
+  // form fields
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [password, setPassword] = useState("");
 
-  // UI
   const [showPassword, setShowPassword] = useState(false);
 
-  // OTP resend logic
+  // OTP timer
   const [resendTimer, setResendTimer] = useState(60);
   const [resendDisabled, setResendDisabled] = useState(false);
 
   const { toast } = useToast();
-  const searchParams = useSearchParams();
   const passwordStrength = getPasswordStrength(password);
+  const searchParams = useSearchParams();
 
-  /* ─────────────────────────────────────────────── */
-  /* TIMER EFFECT */
-  /* ─────────────────────────────────────────────── */
+  /* ----------------------------------------------
+     TIMER EFFECT
+---------------------------------------------- */
   useEffect(() => {
     if (!resendDisabled) return;
 
@@ -76,23 +75,25 @@ function AuthContent() {
     return () => clearInterval(interval);
   }, [resendDisabled]);
 
-  /* ─────────────────────────────────────────────── */
-  /* FORM SUBMIT HANDLER */
-  /* ─────────────────────────────────────────────── */
+  /* ----------------------------------------------
+     SUBMIT HANDLER
+---------------------------------------------- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     const account = getAppwriteAccount();
     try {
-      /* ───────── SIGNUP: send OTP ───────── */
+      /* -------- SIGNUP -------- */
       if (step === "signup") {
+        const internalPass = ID.unique(); // internal password, never shown to user
+
         try {
-          await account.create(ID.unique(), email);
+          await account.create(ID.unique(), email, internalPass, fullName);
         } catch {
           toast({
             variant: "destructive",
-            title: "Email Already Exists",
+            title: "Email already exists",
             description: "Try signing in instead.",
           });
           setStep("signin");
@@ -105,31 +106,24 @@ function AuthContent() {
 
         await account.createEmailToken(ID.unique(), email);
 
-        toast({ title: "Code Sent!", description: `Check your inbox.` });
-        setStep("otp");
+        toast({ title: "Verification Sent!", description: "Enter the OTP sent to your email." });
         setResendDisabled(true);
+        setStep("otp");
       }
 
-      /* ───────── OTP VERIFY ───────── */
+      /* -------- OTP VERIFY -------- */
       else if (step === "otp") {
         const storedEmail = localStorage.getItem("pp_email");
-        const storedName = localStorage.getItem("pp_name");
-
         if (!storedEmail) throw new Error("Signup expired. Start again.");
 
         await account.createEmailPasswordSession(storedEmail, otpCode);
 
-        if (storedName) {
-          await account.updateName(storedName);
-          localStorage.removeItem("pp_name");
-        }
-
+        toast({ title: "Email Verified!", description: "Now create a password." });
         setEmail(storedEmail);
-        toast({ title: "Verified!", description: "Now set a password." });
         setStep("password");
       }
 
-      /* ───────── SET PASSWORD ───────── */
+      /* -------- SET PASSWORD -------- */
       else if (step === "password") {
         if (passwordStrength.score < 3)
           throw new Error("Password too weak. Add numbers, uppercase, symbols.");
@@ -137,16 +131,17 @@ function AuthContent() {
         await account.updatePassword(password);
         await account.createEmailPasswordSession(email, password);
 
-        toast({ title: "Account Ready!", description: "Welcome to Prompt Pro 🚀" });
+        toast({ title: "Account Ready!", description: "Welcome to Prompt Pro!" });
         window.location.href = "/";
       }
 
-      /* ───────── SIGN IN ───────── */
+      /* -------- SIGN IN -------- */
       else if (step === "signin") {
         await account.createEmailPasswordSession(email, password);
         toast({ title: "Welcome back!" });
         window.location.href = "/";
       }
+
     } catch (err: any) {
       toast({ variant: "destructive", title: "Error", description: err.message });
     } finally {
@@ -154,9 +149,9 @@ function AuthContent() {
     }
   };
 
-  /* ─────────────────────────────────────────────── */
-  /* RESEND OTP */
-  /* ─────────────────────────────────────────────── */
+  /* ----------------------------------------------
+     RESEND OTP
+---------------------------------------------- */
   const handleResend = async () => {
     if (resendDisabled) return;
 
@@ -170,55 +165,47 @@ function AuthContent() {
     setResendDisabled(true);
   };
 
-  /* ─────────────────────────────────────────────── */
-  /* UI SECTION */
-  /* ─────────────────────────────────────────────── */
+  /* ----------------------------------------------
+     UI
+---------------------------------------------- */
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-6">
       <Link href="/" className="absolute left-6 top-6 flex items-center gap-2 text-gray-500">
-        <ArrowLeft className="w-4 h-4" /> Back to Home
+        <ArrowLeft className="w-4 h-4" /> Home
       </Link>
 
       <div className="w-full max-w-md space-y-6">
         <h2 className="text-3xl font-semibold text-center">
           {step === "signup" && "Create an account"}
-          {step === "otp" && "Verify Email"}
-          {step === "password" && "Secure your account"}
+          {step === "otp" && "Verify your email"}
+          {step === "password" && "Create password"}
           {step === "signin" && "Sign In"}
         </h2>
 
-        <p className="text-center text-gray-500">
-          {step === "signup" && "We'll send you a code to verify your email."}
-          {step === "otp" && `Enter the code sent to ${email || localStorage.getItem("pp_email")}`}
-          {step === "password" && "Set a strong password to complete signup."}
-        </p>
-
         <form className="space-y-4" onSubmit={handleSubmit}>
-          {/* SIGNUP */}
+
+          {/* SIGNUP FIELDS */}
           {step === "signup" && (
             <>
-              <div>
-                <Label>Full Name</Label>
-                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-              </div>
-              <div>
-                <Label>Email</Label>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              </div>
+              <Label>Full Name</Label>
+              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+
+              <Label>Email</Label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </>
           )}
 
-          {/* OTP */}
+          {/* OTP FIELD */}
           {step === "otp" && (
-            <div>
-              <Label>Verification Code</Label>
-              <Input value={otpCode} onChange={(e) => setOtpCode(e.target.value)} required maxLength={6} />
-            </div>
+            <>
+              <Label>Enter OTP</Label>
+              <Input value={otpCode} onChange={(e) => setOtpCode(e.target.value)} maxLength={6} required />
+            </>
           )}
 
-          {/* PASSWORD + STRENGTH BAR */}
+          {/* PASSWORD FIELD + STRENGTH */}
           {step === "password" && (
-            <div>
+            <>
               <Label>Password</Label>
               <div className="relative">
                 <Input
@@ -236,11 +223,10 @@ function AuthContent() {
                 </button>
               </div>
 
-              {/* Strength bar */}
               {password.length > 0 && (
                 <div className="mt-3 space-y-1">
                   <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map((i) => (
+                    {[1,2,3,4,5].map((i) => (
                       <div
                         key={i}
                         className={`h-2 flex-1 rounded ${
@@ -249,19 +235,13 @@ function AuthContent() {
                       />
                     ))}
                   </div>
-                  <p
-                    className={`text-xs font-medium ${
-                      passwordStrength.score >= 4 ? "text-green-600" : "text-gray-500"
-                    }`}
-                  >
-                    {passwordStrength.label}
-                  </p>
+                  <p className="text-xs font-medium text-gray-500">{passwordStrength.label}</p>
                 </div>
               )}
-            </div>
+            </>
           )}
 
-          {/* SIGN IN PASSWORD */}
+          {/* SIGNIN FIELDS */}
           {step === "signin" && (
             <>
               <Label>Email</Label>
@@ -273,9 +253,9 @@ function AuthContent() {
           )}
 
           <Button disabled={isLoading} className="w-full">
-            {isLoading ? <Loader2 className="animate-spin mr-2" /> : null}
-            {step === "signup" && "Send Verification Code"}
-            {step === "otp" && "Verify Code"}
+            {isLoading && <Loader2 className="animate-spin mr-2" />}
+            {step === "signup" && "Send OTP"}
+            {step === "otp" && "Verify OTP"}
             {step === "password" && "Finish & Login"}
             {step === "signin" && "Login"}
           </Button>
@@ -283,23 +263,26 @@ function AuthContent() {
 
         {/* RESEND OTP */}
         {step === "otp" && (
-          <p className="text-center text-sm text-gray-500">
-            Didn’t receive it?{" "}
+          <p className="text-center text-sm">
+            Didn’t get code?
             <button
               disabled={resendDisabled}
               onClick={handleResend}
-              className={`underline ${resendDisabled ? "opacity-50" : "text-violet-600"}`}
+              className={`ml-1 underline ${
+                resendDisabled ? "opacity-50" : "text-violet-600"
+              }`}
             >
-              Resend {resendDisabled && `in ${resendTimer}s`}
+              Resend {resendDisabled && `${resendTimer}s`}
             </button>
           </p>
         )}
 
-        {/* SWITCH SIGNIN ↔ SIGNUP */}
+        {/* SWITCH */}
         {step !== "otp" && (
           <p className="text-center text-sm">
-            {step === "signup" ? "Already have an account?" : "New to Prompt Pro?"}{" "}
-            <button className="text-violet-600 underline"
+            {step === "signup" ? "Already have an account?" : "New here?"}{" "}
+            <button
+              className="text-violet-600 underline"
               onClick={() => setStep(step === "signup" ? "signin" : "signup")}
             >
               {step === "signup" ? "Sign In" : "Create Account"}
@@ -311,7 +294,7 @@ function AuthContent() {
   );
 }
 
-/* ─────────────────────────────────────────────── */
+/* ---------------------------------------------- */
 export default function AuthPage() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
