@@ -123,33 +123,36 @@ function AuthContent() {
       }
 
       /* ---------- OTP VERIFY ---------- */
-      else if (view === "otpVerify") {
-        try {
-          const uid = localStorage.getItem("temp_signup_uid");
-          if (!uid) throw new Error("User session expired. Please sign up again.");
+      /* ---------- OTP VERIFY ---------- */
+else if (view === "otpVerify") {
+  try {
+    const uid = localStorage.getItem("temp_signup_uid");
+    if (!uid) throw new Error("User session expired. Please sign up again.");
 
-          await account.createEmailSession(uid, otpCode);
+    // FIX: correct OTP verification method for Appwrite 1.x
+    await account.createSession(uid, otpCode);
 
-          const storedName = localStorage.getItem("temp_signup_name");
-          if (storedName) {
-            await account.updateName(storedName);
-            localStorage.removeItem("temp_signup_name");
-          }
+    const storedName = localStorage.getItem("temp_signup_name");
+    if (storedName) {
+      await account.updateName(storedName);
+      localStorage.removeItem("temp_signup_name");
+    }
 
-          toast({
-            title: "Email verified via OTP!",
-            description: "Now create a password to secure your account.",
-          });
+    toast({
+      title: "Email verified via OTP!",
+      description: "Now create a password to secure your account.",
+    });
 
-          setView("setPassword");
-        } catch (err: any) {
-          toast({
-            variant: "destructive",
-            title: "Incorrect OTP",
-            description: "Try again or check your email.",
-          });
-        }
-      }
+    setView("setPassword");
+  } catch (err: any) {
+    toast({
+      variant: "destructive",
+      title: "Incorrect OTP",
+      description: "Try again or check your email.",
+    });
+  }
+}
+
 
       /* ---------- SET PASSWORD ---------- */
       else if (view === "setPassword") {
