@@ -65,7 +65,11 @@ export default function AuthPage() {
     setLoading(true);
     try {
       await account.create(ID.unique(), email, "temporaryPass123!", name);
-      const token = await account.createEmailToken(email);
+      const token = await account.createEmailToken({
+  userId: uid,
+  email: email,
+});
+
       setUid(token.userId);
       setStep("otp");
     } catch (err) {
