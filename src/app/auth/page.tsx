@@ -136,25 +136,29 @@ function AuthContent() {
       }
 
       /** ------ SIGN UP (create user + send OTP + send link) ------ */
-      else if (view === "signUp") {
-        const userId = ID.unique();
-        localStorage.setItem("temp_signup_uid", userId);
-        localStorage.setItem("temp_signup_name", name);
+      /* ---------- SIGN UP (create user + send OTP + send link) ---------- */
+else if (view === "signUp") {
+  const userId = ID.unique();
+  localStorage.setItem("temp_signup_uid", userId);
+  localStorage.setItem("temp_signup_name", name);
 
-        await account.create(userId, email);
+  // temporary password just to create the user
+  const tempPassword = ID.unique();  
+  await account.create(userId, email, tempPassword, name);
 
-        const redirectUrl = `${window.location.origin}/auth`;
-        await account.createVerification(redirectUrl);   // magic link
-        await account.createEmailToken(userId, email);   // otp
+  const redirectUrl = `${window.location.origin}/auth`;
+  await account.createVerification(redirectUrl);   // magic link
+  await account.createEmailToken(userId, email);   // otp
 
-        toast({
-          title: "Check your email",
-          description: "We've sent a magic link and a 6-digit OTP — use either to verify.",
-          duration: 7000
-        });
+  toast({
+    title: "Verify your email",
+    description: "We sent a magic link and a 6-digit OTP — use either.",
+    duration: 7000,
+  });
 
-        setView("otpVerify");
-      }
+  setView("otpVerify");
+}
+
 
       /** ------ OTP VERIFY ------ */
       else if (view === "otpVerify") {
