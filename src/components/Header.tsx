@@ -26,6 +26,15 @@ export default function Header() {
   const [user, setUser] = useState<AppwriteUser | null>(null);
   const [isPremium, setIsPremium] = useState(false);
 
+  /* 🌙 DISABLE BACKGROUND SCROLL WHEN MOBILE MENU IS OPEN */
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+  }, [mobileMenuOpen]);
+
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
@@ -69,7 +78,6 @@ export default function Header() {
 
   return (
     <>
-      {/* Announcement bar */}
       <div className="bg-gradient-to-r from-violet-900 to-indigo-900 text-white text-xs md:text-sm py-2 px-4 text-center font-medium relative z-[60]">
         🎉 New Year Offer: Use <span className="font-bold text-yellow-300">DA62</span> for 1 Month Free Premium!
       </div>
@@ -82,7 +90,6 @@ export default function Header() {
         }`}
       >
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          {/* LOGO + BRAND */}
           <Link href="/" className="flex items-center gap-2 group">
             <div className="relative w-8 h-8 md:w-9 md:h-9 transition-transform group-hover:scale-110 duration-200">
               <Image src="/logo.jpg" alt="Prompt Pro Logo" fill className="object-contain" />
@@ -92,7 +99,7 @@ export default function Header() {
             </span>
           </Link>
 
-          {/* DESKTOP NAV */}
+          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-8">
             {navLinks.map(link => (
               <Link
@@ -105,7 +112,7 @@ export default function Header() {
             ))}
           </nav>
 
-          {/* DESKTOP USER BUTTON + PRO BUTTON */}
+          {/* Desktop user section */}
           <div className="hidden md:flex items-center gap-4">
             {user ? (
               <DropdownMenu>
@@ -142,40 +149,49 @@ export default function Header() {
             )}
           </div>
 
-          {/* MOBILE TOGGLE BUTTON */}
+          {/* Mobile toggle */}
           <button className="md:hidden p-2" onClick={() => setMobileMenuOpen(prev => !prev)}>
             {mobileMenuOpen ? <X className="text-gray-700" /> : <Menu className="text-gray-700" />}
           </button>
         </div>
 
-        {/* 🚀 MOBILE MENU (ADDED) */}
+        {/* 🌙 BACKDROP + SLIDE-IN MENU */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 py-4 space-y-1 px-4 shadow-lg">
-            {navLinks.map(link => (
-              <Link
-                key={link.name}
-                href={link.href}
-                className="block py-2 text-gray-700 dark:text-gray-200 font-medium hover:text-violet-600"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                {link.name}
-              </Link>
-            ))}
+          <>
+            {/* DARK BACKDROP — click to close */}
+            <div
+              className="fixed inset-0 bg-black/40 z-40 md:hidden"
+              onClick={() => setMobileMenuOpen(false)}
+            />
 
-            <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-              {user ? (
-                <button className="text-red-600 flex items-center gap-2 py-2" onClick={handleLogout}>
-                  <LogOut className="w-4 h-4" /> Log out
-                </button>
-              ) : (
-                <Link href="/auth" onClick={() => setMobileMenuOpen(false)}>
-                  <button className="w-full py-2 text-left text-gray-700 dark:text-gray-200">
-                    Sign In
-                  </button>
+            {/* SLIDE-IN MENU */}
+            <div className="fixed top-[73px] left-0 right-0 z-50 md:hidden animate-in slide-in-from-top duration-200 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 py-4 space-y-1 px-4 shadow-lg">
+              {navLinks.map(link => (
+                <Link
+                  key={link.name}
+                  href={link.href}
+                  className="block py-2 text-gray-700 dark:text-gray-200 font-medium hover:text-violet-600"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {link.name}
                 </Link>
-              )}
+              ))}
+
+              <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                {user ? (
+                  <button className="text-red-600 flex items-center gap-2 py-2" onClick={handleLogout}>
+                    <LogOut className="w-4 h-4" /> Log out
+                  </button>
+                ) : (
+                  <Link href="/auth" onClick={() => setMobileMenuOpen(false)}>
+                    <button className="w-full py-2 text-left text-gray-700 dark:text-gray-200">
+                      Sign In
+                    </button>
+                  </Link>
+                )}
+              </div>
             </div>
-          </div>
+          </>
         )}
       </header>
     </>
