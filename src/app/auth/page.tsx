@@ -1,240 +1,266 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { getAppwriteAccount, ID } from "@/lib/appwrite";
-import { ArrowLeft, Loader2, Lock, Mail, User, Eye, EyeOff, Check } from "lucide-react";
-
-export default function AuthPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-violet-600" /></div>}>
-      <AuthContent />
-    </Suspense>
-  );
-}
+import { account, ID } from "@/lib/appwrite";
 
 function AuthContent() {
+  const { toast } = useToast();
+  const searchParams = useSearchParams();
+
   const [step, setStep] = useState<"signup" | "otp" | "password">("signup");
-  const [email, setEmail] = useState("");
+
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
-  const router = useRouter();
+  // resend otp
+  const [timer, setTimer] = useState(0);
+  const [disableResend, setDisableResend] = useState(false);
 
-  const [resendTimer, setResendTimer] = useState(30);
-  const [resendDisabled, setResendDisabled] = useState(false);
+  const uid = typeof window !== "undefined" ? localStorage.getItem("otp_uid") : null;
 
-  // Password Strength Rules
-  const minLength = password.length >= 8;
+  // ----------------- PASSWORD STRENGTH ------------------
+  const hasMin = password.length >= 8;
+  const hasNum = /\d/.test(password);
   const hasUpper = /[A-Z]/.test(password);
-  const hasNumber = /\d/.test(password);
-  const passwordValid = minLength && hasUpper && hasNumber;
+  const strengthScore = [hasMin, hasNum, hasUpper].filter(Boolean).length;
 
-  // Resend timer logic
+  const strengthLabel =
+    strengthScore === 1 ? "Weak" : strengthScore === 2 ? "Medium" : strengthScore === 3 ? "Strong" : "Too weak";
+
+  // ------------------- TIMER RESEND ----------------------
   useEffect(() => {
-    if (!resendDisabled) return;
-    if (resendTimer <= 0) {
-      setResendTimer(30);
-      setResendDisabled(false);
-      return;
-    }
-    const interval = setTimeout(() => setResendTimer((t) => t - 1), 1000);
-    return () => clearTimeout(interval);
-  }, [resendDisabled, resendTimer]);
+    let interval: NodeJS.Timeout | undefined;
 
-  const handleSendOTP = async () => {
-    setIsLoading(true);
-    const account = getAppwriteAccount();
+    if (disableResend && timer > 0) {
+      interval = setInterval(() => {
+        setTimer((x) => x - 1);
+      }, 1000);
+    }
+
+    if (timer <= 0 && disableResend) {
+      setDisableResend(false);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [disableResend, timer]);
+
+  // --------------------- SEND OTP ------------------------
+  const handleSignup = async (e: any) => {
+    e.preventDefault();
 
     try {
-      // 🔹 Try login (if email exists)
-      const testPassword = ID.unique();
-      await account.createEmailPasswordSession(email, testPassword);
+      // --- Create OTP Token ---
+      const otpRes = await account.createEmailToken({
+        userId: ID.unique(),
+        email: email,
+      });
 
-      // ✔ Existing account
-      toast({ title: "Welcome back!", description: "Login instead." });
-      return router.push("/auth?signin=true");
-    } catch {
-      // Creating a temporary random password
+      // --- Create user with random temp password ---
       const tempPassword = ID.unique();
+      await account.create(otpRes.userId, email, tempPassword, name);
 
-      try {
-        await account.create(ID.unique(), email, tempPassword, name);
+      localStorage.setItem("otp_uid", otpRes.userId);
+      localStorage.setItem("temp_name", name);
+      localStorage.setItem("temp_email", email);
 
-        const otpRes = await account.createEmailToken(email);
-        localStorage.setItem("otp_uid", otpRes.userId);
-        localStorage.setItem("temp_name", name);
+      setStep("otp");
+      toast({ title: "OTP Sent!", description: `Check your inbox at ${email}` });
 
-        setStep("otp");
-        toast({ title: "OTP Sent", description: "Check your inbox." });
-        setResendDisabled(true);
-      } catch (error: any) {
-        toast({ variant: "destructive", title: "Signup Failed", description: error.message });
-      }
-    }
-
-    setIsLoading(false);
-  };
-
-  const handleVerifyOTP = async () => {
-    setIsLoading(true);
-    const account = getAppwriteAccount();
-    const uid = localStorage.getItem("otp_uid");
-
-    if (!uid) {
-      toast({ variant: "destructive", title: "Error", description: "Session expired. Please sign up again." });
-      return location.reload();
-    }
-
-    try {
-      await account.createEmailSession(uid, otpCode);
-      setStep("password");
-      toast({ title: "Email Verified", description: "Now set a password" });
+      setDisableResend(true);
+      setTimer(30);
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Invalid OTP", description: "Try again." });
+      toast({
+        variant: "destructive",
+        title: "Signup Failed",
+        description: err.message || "Something went wrong",
+      });
     }
-    setIsLoading(false);
   };
 
-  const handleSetPassword = async () => {
-    if (!passwordValid) {
-      toast({ variant: "destructive", title: "Weak Password", description: "Follow password rules." });
-      return;
-    }
-
-    setIsLoading(true);
-    const account = getAppwriteAccount();
-    const storedName = localStorage.getItem("temp_name");
+  // --------------------- VERIFY OTP ----------------------
+  const handleOtpVerify = async (e: any) => {
+    e.preventDefault();
 
     try {
+      if (!uid) throw new Error("User session expired. Signup again.");
+
+      await account.createSession(uid, otpCode);
+      setStep("password");
+
+      toast({ title: "OTP Verified", description: "Set a password to continue" });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Code",
+        description: err.message,
+      });
+    }
+  };
+
+  // ------------------ SET FINAL PASSWORD -----------------
+  const handlePasswordSet = async (e: any) => {
+    e.preventDefault();
+
+    try {
+      if (!hasMin || !hasNum || !hasUpper)
+        throw new Error("Password must be strong (8 chars, 1 number, 1 uppercase)");
+
       await account.updatePassword(password);
-      if (storedName) await account.updateName(storedName);
 
-      localStorage.removeItem("temp_name");
+      const savedName = localStorage.getItem("temp_name");
+      const savedEmail = localStorage.getItem("temp_email");
+
+      if (savedName) await account.updateName(savedName);
+      if (savedEmail) await account.updateEmail(savedEmail);
+
       localStorage.removeItem("otp_uid");
+      localStorage.removeItem("temp_name");
+      localStorage.removeItem("temp_email");
 
-      toast({ title: "Account Ready!", description: "Redirecting..." });
-      router.push("/");
+      toast({ title: "Account Ready!", description: "Welcome to Prompt Pro" });
+      window.location.href = "/";
     } catch (err: any) {
       toast({ variant: "destructive", title: "Error", description: err.message });
     }
-    setIsLoading(false);
   };
 
+  // -------------------------------------------------------
+  // ------------------------- UI --------------------------
+  // -------------------------------------------------------
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-white">
+      <Link href="/" className="flex items-center gap-1 text-gray-500">
+        <ArrowLeft size={18} /> Home
+      </Link>
 
-      {/* ---------------- SIGNUP SCREEN ---------------- */}
+      {/* ---------------- SIGNUP FORM ---------------- */}
       {step === "signup" && (
-        <form className="max-w-md w-full space-y-5" onSubmit={(e) => { e.preventDefault(); handleSendOTP(); }}>
-          <Link href="/" className="text-sm text-gray-500 flex items-center gap-1">
-            <ArrowLeft className="w-4 h-4" /> Home
-          </Link>
+        <form
+          onSubmit={handleSignup}
+          className="w-full max-w-md bg-white p-8 shadow rounded-lg space-y-6 mt-6"
+        >
+          <h2 className="text-3xl font-bold text-center">Create an account</h2>
 
-          <h2 className="text-2xl font-bold">Create an account</h2>
-
-          <div className="space-y-1">
+          <div>
             <Label>Full Name</Label>
-            <div className="relative">
-              <User className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
-              <Input value={name} onChange={(e) => setName(e.target.value)} required className="pl-10" />
-            </div>
+            <Input value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
 
-          <div className="space-y-1">
+          <div>
             <Label>Email</Label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10" />
-            </div>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setStep("signup"); // if user changes email from error state
+              }}
+              required
+            />
           </div>
 
-          <Button disabled={isLoading} type="submit" className="w-full">
-            {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : "Send OTP"}
+          <Button type="submit" className="w-full">
+            Send OTP
           </Button>
         </form>
       )}
 
-      {/* ---------------- OTP SCREEN ---------------- */}
+      {/* ---------------- OTP FORM ---------------- */}
       {step === "otp" && (
-        <div className="max-w-md w-full space-y-5 text-center">
-          <h2 className="text-2xl font-bold">Verify your email</h2>
-          <p className="text-gray-500">Enter OTP sent to: <b>{email}</b></p>
+        <form
+          onSubmit={handleOtpVerify}
+          className="w-full max-w-md bg-white p-8 shadow rounded-lg space-y-6 mt-6"
+        >
+          <h2 className="text-3xl font-bold text-center">Verify your email</h2>
+          <p className="text-center text-gray-600">Enter the code sent to: <b>{email}</b></p>
 
-          <Input maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} className="text-center text-xl" />
+          <Input
+            maxLength={6}
+            value={otpCode}
+            onChange={(e) => setOtpCode(e.target.value)}
+            required
+          />
 
-          <Button disabled={isLoading} onClick={handleVerifyOTP} className="w-full">
-            {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : "Verify OTP"}
+          <Button type="submit" className="w-full">
+            Verify OTP
           </Button>
 
-          <p className="text-sm text-gray-500">
-            Didn’t get code?{" "}
-            {resendDisabled ? (
-              <span className="text-gray-400">{resendTimer}s</span>
+          <p className="text-center text-gray-500">
+            Didn't get code?
+            {disableResend ? (
+              <span className="ml-2 text-gray-400">Resend {timer}s</span>
             ) : (
-              <button onClick={handleSendOTP} className="underline text-violet-600">
+              <button
+                type="button"
+                className="ml-2 underline"
+                onClick={handleSignup}
+              >
                 Resend
               </button>
             )}
           </p>
-        </div>
+        </form>
       )}
 
-      {/* ---------------- PASSWORD SCREEN ---------------- */}
+      {/* ---------------- PASSWORD FORM ---------------- */}
       {step === "password" && (
-        <div className="max-w-md w-full space-y-5 text-center">
-          <h2 className="text-2xl font-bold">Set Password</h2>
+        <form
+          onSubmit={handlePasswordSet}
+          className="w-full max-w-md bg-white p-8 shadow rounded-lg space-y-6 mt-6"
+        >
+          <h2 className="text-3xl font-bold text-center">Secure your account</h2>
 
-          <div className="relative">
-            <Lock className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+          <div>
+            <Label>New Password</Label>
             <Input
-              type={showPassword ? "text" : "password"}
-              placeholder="Create password"
+              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="pl-10"
+              required
             />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3">
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
           </div>
 
-          {/* Strength Rules */}
-          <div className="space-y-1 text-left text-sm">
-            <div className={`flex items-center gap-2 ${minLength ? "text-green-600" : "text-gray-400"}`}>
-              <Check className="w-4 h-4" /> 8+ characters
-            </div>
-            <div className={`flex items-center gap-2 ${hasUpper ? "text-green-600" : "text-gray-400"}`}>
-              <Check className="w-4 h-4" /> 1 uppercase
-            </div>
-            <div className={`flex items-center gap-2 ${hasNumber ? "text-green-600" : "text-gray-400"}`}>
-              <Check className="w-4 h-4" /> 1 number
-            </div>
+          {/* Strength bar */}
+          <div className="flex gap-2 text-sm">
+            <span className={hasMin ? "text-green-600" : "text-gray-400"}>8+ chars</span>
+            <span className={hasNum ? "text-green-600" : "text-gray-400"}>number</span>
+            <span className={hasUpper ? "text-green-600" : "text-gray-400"}>uppercase</span>
           </div>
 
-          <Button
-            disabled={!passwordValid || isLoading}
-            onClick={handleSetPassword}
-            className="w-full"
-          >
-            {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : "Finish & Login"}
+          <Button className="w-full" type="submit">
+            Save Password
           </Button>
-        </div>
+        </form>
       )}
-
     </div>
   );
 }
 
+export default function AuthPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="animate-spin" size={32} />
+        </div>
+      }
+    >
+      <AuthContent />
+    </Suspense>
+  );
+}
 
 
 
