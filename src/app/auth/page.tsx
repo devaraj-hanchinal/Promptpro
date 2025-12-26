@@ -1,431 +1,320 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { getAppwriteAccount, ID } from "@/lib/appwrite";
+import { Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
-import {
-  Loader2,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+/* ─────────────────────────────────────────────── */
+/* PASSWORD STRENGTH LOGIC */
+/* ─────────────────────────────────────────────── */
+const getPasswordStrength = (password: string) => {
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[a-z]/.test(password)) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
 
+  const labels = ["Very Weak", "Weak", "Medium", "Strong", "Very Strong"];
+  const colors = ["bg-red-500", "bg-orange-400", "bg-yellow-400", "bg-green-500", "bg-emerald-600"];
+
+  return {
+    score,
+    label: labels[score - 1] || "",
+    color: colors[score - 1] || "bg-gray-300",
+  };
+};
+
+/* ─────────────────────────────────────────────── */
+/* MAIN COMPONENT */
+/* ─────────────────────────────────────────────── */
 function AuthContent() {
-  const router = useRouter();
-  const { toast } = useToast();
+  const [step, setStep] = useState<"signup" | "otp" | "password" | "signin">("signup");
 
-  // ------------------ SCREEN STATES ------------------
-  const [view, setView] = useState<
-    "signIn" | "signUp" | "verifyOTP" | "setPassword"
-  >("signIn");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // ------------------ FORM FIELDS ------------------
+  // Form values
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [tempPassword, setTempPassword] = useState("");
-  const [name, setName] = useState("");
   const [otpCode, setOtpCode] = useState("");
+  const [password, setPassword] = useState("");
+
+  // UI
   const [showPassword, setShowPassword] = useState(false);
 
-  // ------------------ PASSWORD CHECKS ------------------
-  const hasMinLength = password.length >= 8;
-  const hasNumber = /\d/.test(password);
-
-  // ------------------ LOADING & TIMER ------------------
-  const [isLoading, setIsLoading] = useState(false);
+  // OTP resend logic
   const [resendTimer, setResendTimer] = useState(60);
-  const [isResendDisabled, setIsResendDisabled] = useState(true);
+  const [resendDisabled, setResendDisabled] = useState(false);
 
-  // ------------------ TIMER EFFECT ------------------
-  // ------------------ TIMER EFFECT ------------------
-useEffect(() => {
-  let interval: NodeJS.Timeout | undefined;
+  const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const passwordStrength = getPasswordStrength(password);
 
-  if (isResendDisabled && resendTimer > 0) {
-    interval = setInterval(() => {
-      setResendTimer((prev) => prev - 1);
+  /* ─────────────────────────────────────────────── */
+  /* TIMER EFFECT */
+  /* ─────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!resendDisabled) return;
+
+    const interval = setInterval(() => {
+      setResendTimer((prev) => {
+        if (prev <= 1) {
+          setResendDisabled(false);
+          clearInterval(interval);
+          return 60;
+        }
+        return prev - 1;
+      });
     }, 1000);
-  }
 
-  return () => {
-    if (interval) clearInterval(interval);
-  };
-}, [isResendDisabled, resendTimer]);
+    return () => clearInterval(interval);
+  }, [resendDisabled]);
 
-  // --------------------------------------------------
-  // 🔹 SIGN IN
-  // --------------------------------------------------
-  const handleSignIn = async () => {
+  /* ─────────────────────────────────────────────── */
+  /* FORM SUBMIT HANDLER */
+  /* ─────────────────────────────────────────────── */
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
+
+    const account = getAppwriteAccount();
     try {
-      const account = getAppwriteAccount();
+      /* ───────── SIGNUP: send OTP ───────── */
+      if (step === "signup") {
+        try {
+          await account.create(ID.unique(), email);
+        } catch {
+          toast({
+            variant: "destructive",
+            title: "Email Already Exists",
+            description: "Try signing in instead.",
+          });
+          setStep("signin");
+          setIsLoading(false);
+          return;
+        }
 
-      await account.createSession(email, password);
+        localStorage.setItem("pp_name", fullName);
+        localStorage.setItem("pp_email", email);
 
-      toast({
-        title: "Welcome back!",
-        description: "Successfully signed in.",
-      });
+        await account.createEmailToken(ID.unique(), email);
 
-      router.push("/");
-    } catch (err) {
-      toast({
-        title: "Account not found?",
-        description: "Continuing to sign up",
-      });
-      setView("signUp");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // --------------------------------------------------
-  // 🆕 SIGN UP → CREATE ACCOUNT + SEND OTP
-  // --------------------------------------------------
-  const handleSignup = async () => {
-    setIsLoading(true);
-    try {
-      const account = getAppwriteAccount();
-      const uid = ID.unique();
-
-      // Create temp account with temp password
-      await account.create(uid, email, tempPassword, name);
-
-      localStorage.setItem("temp_uid", uid);
-      localStorage.setItem("temp_signup_name", name);
-
-      // Send OTP mail
-      await account.createEmailToken(uid, email);
-
-      toast({
-        title: "OTP Sent 🚀",
-        description: "Check your inbox",
-      });
-
-      setIsResendDisabled(true);
-      setResendTimer(60);
-      setView("verifyOTP");
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Signup Failed",
-        description: err.message,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // --------------------------------------------------
-  // 🔐 VERIFY OTP
-  // --------------------------------------------------
-  const handleVerifyOTP = async () => {
-    setIsLoading(true);
-    try {
-      const account = getAppwriteAccount();
-      const uid = localStorage.getItem("temp_uid");
-
-      if (!uid) throw new Error("Session expired, signup again");
-
-      // OTP verifies + logs user in
-      await account.createSession(email, otpCode);
-
-      toast({
-        title: "Email verified 🎉",
-        description: "Now create your password",
-      });
-
-      setView("setPassword");
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Code",
-        description: err.message,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // --------------------------------------------------
-  // 🔁 RESEND OTP
-  // --------------------------------------------------
-  const handleResendOTP = async () => {
-    setIsLoading(true);
-    try {
-      const account = getAppwriteAccount();
-      const uid = localStorage.getItem("temp_uid");
-      if (!uid) throw new Error("Session expired, signup again");
-
-      await account.createEmailToken(uid, email);
-
-      toast({
-        title: "Sent again",
-        description: "Check your inbox",
-      });
-
-      setIsResendDisabled(true);
-      setResendTimer(60);
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Failed",
-        description: err.message,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // --------------------------------------------------
-  // 🔑 SET PASSWORD
-  // --------------------------------------------------
-  const handleSetPassword = async () => {
-    if (!hasMinLength || !hasNumber) return;
-
-    setIsLoading(true);
-    try {
-      const account = getAppwriteAccount();
-      const savedName = localStorage.getItem("temp_signup_name");
-
-      await account.updatePassword(password);
-
-      if (savedName) {
-        await account.updateName(savedName);
-        localStorage.removeItem("temp_signup_name");
+        toast({ title: "Code Sent!", description: `Check your inbox.` });
+        setStep("otp");
+        setResendDisabled(true);
       }
 
-      toast({
-        title: "Account Ready 🎉",
-        description: "You can now start using Prompt Pro",
-      });
+      /* ───────── OTP VERIFY ───────── */
+      else if (step === "otp") {
+        const storedEmail = localStorage.getItem("pp_email");
+        const storedName = localStorage.getItem("pp_name");
 
-      router.push("/");
+        if (!storedEmail) throw new Error("Signup expired. Start again.");
+
+        await account.createEmailPasswordSession(storedEmail, otpCode);
+
+        if (storedName) {
+          await account.updateName(storedName);
+          localStorage.removeItem("pp_name");
+        }
+
+        setEmail(storedEmail);
+        toast({ title: "Verified!", description: "Now set a password." });
+        setStep("password");
+      }
+
+      /* ───────── SET PASSWORD ───────── */
+      else if (step === "password") {
+        if (passwordStrength.score < 3)
+          throw new Error("Password too weak. Add numbers, uppercase, symbols.");
+
+        await account.updatePassword(password);
+        await account.createEmailPasswordSession(email, password);
+
+        toast({ title: "Account Ready!", description: "Welcome to Prompt Pro 🚀" });
+        window.location.href = "/";
+      }
+
+      /* ───────── SIGN IN ───────── */
+      else if (step === "signin") {
+        await account.createEmailPasswordSession(email, password);
+        toast({ title: "Welcome back!" });
+        window.location.href = "/";
+      }
     } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: err.message,
-      });
+      toast({ variant: "destructive", title: "Error", description: err.message });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ==================================================
-  //                     UI SCREENS
-  // ==================================================
+  /* ─────────────────────────────────────────────── */
+  /* RESEND OTP */
+  /* ─────────────────────────────────────────────── */
+  const handleResend = async () => {
+    if (resendDisabled) return;
 
+    const storedEmail = localStorage.getItem("pp_email");
+    if (!storedEmail) return;
+
+    const account = getAppwriteAccount();
+    await account.createEmailToken(ID.unique(), storedEmail);
+
+    toast({ title: "OTP Resent!", description: `Sent to ${storedEmail}` });
+    setResendDisabled(true);
+  };
+
+  /* ─────────────────────────────────────────────── */
+  /* UI SECTION */
+  /* ─────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-10 bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-black">
+    <div className="flex flex-col items-center justify-center min-h-screen px-6">
+      <Link href="/" className="absolute left-6 top-6 flex items-center gap-2 text-gray-500">
+        <ArrowLeft className="w-4 h-4" /> Back to Home
+      </Link>
+
       <div className="w-full max-w-md space-y-6">
-
-        {/* Product Header */}
-        <div className="flex justify-center mb-2">
-          <span className="text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200 px-3 py-1 rounded-full">
-            🚀 Prompt Pro — AI Prompt Optimization
-          </span>
-        </div>
-
-        {/* Screen Title */}
-        <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100">
-          {view === "signIn" && "Sign In"}
-          {view === "signUp" && "Create Account"}
-          {view === "verifyOTP" && "Verify Email"}
-          {view === "setPassword" && "Set Password"}
+        <h2 className="text-3xl font-semibold text-center">
+          {step === "signup" && "Create an account"}
+          {step === "otp" && "Verify Email"}
+          {step === "password" && "Secure your account"}
+          {step === "signin" && "Sign In"}
         </h2>
 
-        {/* ---------- SIGN IN ---------- */}
-        {view === "signIn" && (
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSignIn();
-            }}
-          >
-            <Input
-              placeholder="Email"
-              value={email}
-              required
-              type="email"
-              onChange={(e) => setEmail(e.target.value)}
-            />
+        <p className="text-center text-gray-500">
+          {step === "signup" && "We'll send you a code to verify your email."}
+          {step === "otp" && `Enter the code sent to ${email || localStorage.getItem("pp_email")}`}
+          {step === "password" && "Set a strong password to complete signup."}
+        </p>
 
-            <div className="relative">
-              <Input
-                placeholder="Password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                required
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <span
-                className="absolute right-3 top-3 cursor-pointer text-gray-500 hover:text-gray-800"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff /> : <Eye />}
-              </span>
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          {/* SIGNUP */}
+          {step === "signup" && (
+            <>
+              <div>
+                <Label>Full Name</Label>
+                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </div>
+            </>
+          )}
+
+          {/* OTP */}
+          {step === "otp" && (
+            <div>
+              <Label>Verification Code</Label>
+              <Input value={otpCode} onChange={(e) => setOtpCode(e.target.value)} required maxLength={6} />
             </div>
+          )}
 
-            <Button className="w-full" disabled={isLoading}>
-              {isLoading ? <Loader2 className="animate-spin" /> : "Continue"}
-            </Button>
-
-            <p className="text-center text-sm text-gray-500">
-              New here?{" "}
-              <button
-                className="text-violet-600"
-                onClick={() => setView("signUp")}
-                type="button"
-              >
-                Create Account
-              </button>
-            </p>
-          </form>
-        )}
-
-        {/* ---------- SIGN UP ---------- */}
-        {view === "signUp" && (
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSignup();
-            }}
-          >
-            <Input
-              placeholder="Full Name"
-              value={name}
-              required
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Input
-              placeholder="Email"
-              value={email}
-              required
-              type="email"
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <Input
-              placeholder="Temporary Password"
-              value={tempPassword}
-              required
-              type="password"
-              onChange={(e) => setTempPassword(e.target.value)}
-            />
-
-            <Button className="w-full" disabled={isLoading}>
-              {isLoading ? <Loader2 className="animate-spin" /> : "Send OTP"}
-            </Button>
-
-            <p className="text-center text-sm text-gray-500">
-              Already have an account?{" "}
-              <button
-                className="text-violet-600"
-                onClick={() => setView("signIn")}
-                type="button"
-              >
-                Sign In
-              </button>
-            </p>
-          </form>
-        )}
-
-        {/* ---------- VERIFY OTP ---------- */}
-        {view === "verifyOTP" && (
-          <div className="space-y-7 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
-            <p className="text-center text-gray-500">
-              Enter the code sent to:
-              <span className="font-semibold text-gray-900 dark:text-gray-300">
-                {" "}
-                {email}
-              </span>
-            </p>
-
-            <Input
-              className="text-center tracking-widest text-xl font-semibold py-6 placeholder-gray-300 border-2 border-violet-200 dark:border-gray-700 focus:border-violet-600"
-              placeholder="••••••"
-              value={otpCode}
-              maxLength={6}
-              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-            />
-
-            <Button className="w-full h-12 font-semibold" onClick={handleVerifyOTP}>
-              {isLoading ? <Loader2 className="animate-spin" /> : "Verify Code"}
-            </Button>
-
-            <div className="text-center text-sm">
-              Didn’t receive it?{" "}
-              {isResendDisabled ? (
-                <span className="text-gray-400">
-                  Resend in {resendTimer}s
-                </span>
-              ) : (
-                <button className="text-violet-600"
-                  onClick={handleResendOTP}>
-                  Resend OTP
+          {/* PASSWORD + STRENGTH BAR */}
+          {step === "password" && (
+            <div>
+              <Label>Password</Label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-3 text-gray-500"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff /> : <Eye />}
                 </button>
+              </div>
+
+              {/* Strength bar */}
+              {password.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div
+                        key={i}
+                        className={`h-2 flex-1 rounded ${
+                          i <= passwordStrength.score ? passwordStrength.color : "bg-gray-200"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p
+                    className={`text-xs font-medium ${
+                      passwordStrength.score >= 4 ? "text-green-600" : "text-gray-500"
+                    }`}
+                  >
+                    {passwordStrength.label}
+                  </p>
+                </div>
               )}
             </div>
-          </div>
+          )}
+
+          {/* SIGN IN PASSWORD */}
+          {step === "signin" && (
+            <>
+              <Label>Email</Label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+
+              <Label>Password</Label>
+              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </>
+          )}
+
+          <Button disabled={isLoading} className="w-full">
+            {isLoading ? <Loader2 className="animate-spin mr-2" /> : null}
+            {step === "signup" && "Send Verification Code"}
+            {step === "otp" && "Verify Code"}
+            {step === "password" && "Finish & Login"}
+            {step === "signin" && "Login"}
+          </Button>
+        </form>
+
+        {/* RESEND OTP */}
+        {step === "otp" && (
+          <p className="text-center text-sm text-gray-500">
+            Didn’t receive it?{" "}
+            <button
+              disabled={resendDisabled}
+              onClick={handleResend}
+              className={`underline ${resendDisabled ? "opacity-50" : "text-violet-600"}`}
+            >
+              Resend {resendDisabled && `in ${resendTimer}s`}
+            </button>
+          </p>
         )}
 
-        {/* ---------- SET PASSWORD ---------- */}
-        {view === "setPassword" && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Label className="font-medium text-sm">Create your password</Label>
-
-            <div className="relative">
-              <Input
-                placeholder="New Password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <span
-                className="absolute right-3 top-3 cursor-pointer text-gray-500 hover:text-gray-800"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff /> : <Eye />}
-              </span>
-            </div>
-
-            <div className="flex gap-1">
-              {[hasMinLength, hasNumber].map((check, i) => (
-                <div
-                  key={i}
-                  className={`h-2 w-full rounded-full transition-colors ${
-                    check ? "bg-green-500" : "bg-gray-300 dark:bg-gray-700"
-                  }`}
-                />
-              ))}
-            </div>
-
-            <Button
-              className="w-full h-12 font-semibold"
-              disabled={!hasMinLength || !hasNumber || isLoading}
-              onClick={handleSetPassword}
+        {/* SWITCH SIGNIN ↔ SIGNUP */}
+        {step !== "otp" && (
+          <p className="text-center text-sm">
+            {step === "signup" ? "Already have an account?" : "New to Prompt Pro?"}{" "}
+            <button className="text-violet-600 underline"
+              onClick={() => setStep(step === "signup" ? "signin" : "signup")}
             >
-              {isLoading ? <Loader2 className="animate-spin" /> : "Continue"}
-            </Button>
-          </div>
+              {step === "signup" ? "Sign In" : "Create Account"}
+            </button>
+          </p>
         )}
       </div>
     </div>
   );
 }
 
+/* ─────────────────────────────────────────────── */
 export default function AuthPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
       <AuthContent />
     </Suspense>
   );
