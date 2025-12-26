@@ -1,201 +1,270 @@
 "use client";
 
-import { useState } from "react";
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Check, XCircle } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { getAppwriteAccount, ID } from "@/lib/appwrite";
+import { Mail, Lock, ChevronLeft, Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function AuthPage() {
-  const [step, setStep] = useState<"signin"|"signup"|"checkEmail"|"otp"|"password">("signin");
+  const router = useRouter();
+
+  // Steps
+  const [step, setStep] = useState<"checkEmail" | "signin" | "signup" | "otp" | "password">("checkEmail");
+
+  // Form state
   const [email, setEmail] = useState("");
-  const [emailExists, setEmailExists] = useState<boolean|null>(null);
-
-  const [otp, setOtp] = useState("");
+  const [name, setName] = useState("");
+  const [otpCode, setOtpCode] = useState("");
   const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
+  const [uid, setUid] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // -------------------------
-  // PASSWORD STRENGTH LOGIC
-  // -------------------------
-  const hasMin   = password.length >= 8;
-  const hasNum   = /\d/.test(password);
-  const hasUpper = /[A-Z]/.test(password);
-  const strength = [hasMin, hasNum, hasUpper].filter(Boolean).length;
+  // Password strength
+  const passwordStrength = (() => {
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (/[0-9]/.test(password)) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+    return score;
+  })();
 
-  // -------------------------
-  // EMAIL CHECK MOCK — replace w/ Appwrite later
-  // -------------------------
-  const fakeUserDB = ["test@gmail.com","demo@user.com"];
-  const checkEmail = async () => {
-    const exists = fakeUserDB.includes(email);
-    setEmailExists(exists);
-    if (exists) setStep("checkEmail"); // show password box
-    else setStep("signup"); // go to sign up page w/ email prefilled
+  const strengthLabel = ["Weak", "Medium", "Strong", "Excellent"][passwordStrength - 1] || "Too short";
+  const strengthColor = ["#dc2626", "#ea580c", "#22c55e", "#0ea5e9"][passwordStrength - 1] || "#71717a";
+
+  const account = getAppwriteAccount();
+
+  const handleCheckEmail = async (e: any) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await account.getSession("current"); // if logged in already?
+      router.push("/");
+      return;
+    } catch {}
+
+    try {
+      const res = await account.createEmailPasswordSession(email, "dummy");
+      // will never work — just to detect existence
+    } catch (err: any) {
+      if (err.message.includes("Invalid credentials")) {
+        setStep("signin"); // Email exists → signin
+      } else {
+        setStep("signup"); // Email does not exist → signup
+      }
+    }
+    setLoading(false);
   };
 
-  const verifyOtp = () => {
-    if (otp.length === 6) setStep("password");
+  const handleSignup = async (e: any) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await account.create(ID.unique(), email, "temporaryPass123!", name);
+      const token = await account.createEmailToken(email);
+      setUid(token.userId);
+      setStep("otp");
+    } catch (err) {
+      console.log(err);
+    }
+    setLoading(false);
   };
 
-  const createPassword = () => {
-    if (strength >= 2) window.location.href = "/";
+  const handleVerifyOtp = async (e: any) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await account.createSession(uid, otpCode);
+      setStep("password");
+    } catch (err) {
+      console.log(err);
+    }
+    setLoading(false);
+  };
+
+  const handleCreatePassword = async (e: any) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const newPassword = password;
+      await account.updatePassword(newPassword);
+      await account.updateEmail(email);
+      await account.createEmailPasswordSession(email, newPassword);
+      router.push("/");
+    } catch (err) {
+      console.log(err);
+    }
+    setLoading(false);
+  };
+
+  const handleSignin = async (e: any) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await account.createEmailPasswordSession(email, password);
+      router.push("/");
+    } catch (err) {
+      console.log(err);
+    }
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      
-      {/* -------- LEFT HERO PANEL -------- */}
-      <aside className="hidden lg:flex flex-col justify-between w-1/2 px-12 py-16 bg-gradient-to-br from-violet-600 to-indigo-700 text-white">
-        <div className="text-4xl font-semibold leading-tight">
-          Master AI prompting<br/>
-          without guesswork
+    <div className="w-full min-h-screen flex bg-[#0a0a0a] text-neutral-200">
+
+      {/* left hero */}
+      <div className="hidden lg:flex w-1/2 flex-col justify-between px-14 py-12 border-r border-neutral-800">
+        <div>
+          <h1 className="text-4xl font-semibold text-white tracking-tight">
+            Prompt Pro
+          </h1>
         </div>
 
-        <div className="space-y-6 text-sm opacity-95">
-          <div>
-            <div className="text-lg font-bold">✨ Instant Prompt Optimization</div>
-            <div>Transform raw prompts into top-tier results.</div>
-          </div>
-          <div>
-            <div className="text-lg font-bold">🚀 10x Productivity</div>
-            <div>Save hours writing content, emails, scripts & more.</div>
-          </div>
-          <div>
-            <div className="text-lg font-bold">👥 Trusted by 10,000+ creators</div>
-            <div>Professionals scaling their output daily.</div>
-          </div>
+        <div className="space-y-6">
+          <h2 className="text-5xl font-semibold leading-tight text-white">
+            Build better prompts.<br />Every day.
+          </h2>
+          <p className="text-neutral-400 text-lg max-w-md">
+            Linear-inspired productivity for prompt engineering.
+            Minimal UI, maximal output.
+          </p>
         </div>
 
-        <p className="text-sm opacity-75">© Prompt Pro — Built for creators.</p>
-      </aside>
+        <p className="text-neutral-500 text-sm">© PromptPro Inc.</p>
+      </div>
 
+      {/* right form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-8">
+        <div className="w-full max-w-sm space-y-8">
+          
+          {/* back button */}
+          {step !== "checkEmail" && (
+            <button
+              className="text-neutral-400 flex items-center gap-2"
+              onClick={() => setStep("checkEmail")}
+            >
+              <ChevronLeft size={18} /> Back
+            </button>
+          )}
 
-      {/* -------- RIGHT AUTH PANEL -------- */}
-      <main className="flex flex-col justify-center items-center w-full lg:w-1/2 px-8">
-        
-        {/* LOGO */}
-        <h1 className="text-3xl font-bold mb-8 text-gray-900">Prompt Pro</h1>
-
-        {/* ---------------- SIGN IN ---------------- */}
-        {step === "signin" && (
-          <div className="w-full max-w-sm space-y-6">
-            <h2 className="text-2xl font-semibold">Welcome back 👋</h2>
-            <p className="text-gray-500">Enter your email to continue</p>
-
-            <Input type="email" placeholder="name@example.com"
-              value={email} onChange={e=>setEmail(e.target.value)} />
-
-            <Button className="w-full bg-violet-600 hover:bg-violet-700"
-              onClick={checkEmail}>
-              Continue <ArrowRight className="ml-2 w-4 h-4"/>
-            </Button>
-
-            <p className="text-sm text-center text-gray-600">
-              New here?{" "}
-              <button className="text-violet-600 font-medium"
-                onClick={()=>setStep("signup")}>
-                Create account
-              </button>
-            </p>
-          </div>
-        )}
-
-        {/* ---------------- EXISTING EMAIL → PASSWORD ---------------- */}
-        {step === "checkEmail" && (
-          <div className="w-full max-w-sm space-y-6">
-            <h2 className="text-2xl font-semibold">Login</h2>
-            <p className="text-gray-500">{email}</p>
-
-            <div className="relative">
-              <Input type={showPass?"text":"password"} placeholder="Password"
-                value={password} onChange={e=>setPassword(e.target.value)} />
-              <button className="absolute right-3 top-2.5 text-gray-500"
-                onClick={()=>setShowPass(!showPass)}>
-                {showPass ? <EyeOff size={18}/> : <Eye size={18}/>}
-              </button>
-            </div>
-
-            <Button className="w-full bg-violet-600 hover:bg-violet-700"
-              onClick={()=>window.location.href="/"}>
-              Sign In
-            </Button>
-          </div>
-        )}
-
-        {/* ---------------- SIGN UP EMAIl PREFILLED ---------------- */}
-        {step === "signup" && (
-          <div className="w-full max-w-sm space-y-6">
-            <h2 className="text-2xl font-semibold">Create your account</h2>
-            <p className="text-gray-500">We'll verify your email first</p>
-
-            <Input value={email} readOnly className="bg-gray-200"/>
-
-            <Button className="w-full bg-violet-600 hover:bg-violet-700"
-              onClick={()=>setStep("otp")}>
-              Send OTP
-            </Button>
-          </div>
-        )}
-
-        {/* ---------------- OTP VERIFICATION ---------------- */}
-        {step === "otp" && (
-          <div className="w-full max-w-sm space-y-6">
-            <h2 className="text-2xl font-semibold">Verify your email</h2>
-            <p className="text-gray-500">Enter the 6-digit code sent to {email}</p>
-
-            <Input maxLength={6} value={otp} onChange={e=>setOtp(e.target.value)}
-              placeholder="123456" className="text-center"/>
-
-            <Button className="w-full bg-violet-600 hover:bg-violet-700"
-              disabled={otp.length !== 6}
-              onClick={verifyOtp}>
-              Verify OTP
-            </Button>
-          </div>
-        )}
-
-        {/* ---------------- PASSWORD SETUP ---------------- */}
-        {step === "password" && (
-          <div className="w-full max-w-sm space-y-6">
-            <h2 className="text-2xl font-semibold">Create password</h2>
-
-            <div className="relative">
-              <Input type={showPass?"text":"password"} placeholder="Password"
-                value={password} onChange={e=>setPassword(e.target.value)} />
-              <button className="absolute right-3 top-2.5 text-gray-500"
-                onClick={()=>setShowPass(!showPass)}>
-                {showPass ? <EyeOff size={18}/> : <Eye size={18}/>}
-              </button>
-            </div>
-
-            {/* Password Strength */}
-            <div className="space-y-1">
-              <div className="h-2 rounded bg-gray-200 overflow-hidden">
-                <div className={`h-full transition-all ${
-                  strength===1 ? "w-1/3 bg-red-500" :
-                  strength===2 ? "w-2/3 bg-yellow-500" :
-                  strength===3 ? "w-full bg-green-600" : ""
-                }`} />
+          {/* steps */}
+          {step === "checkEmail" && (
+            <form onSubmit={handleCheckEmail} className="space-y-5">
+              <h2 className="text-2xl font-medium text-white">Welcome</h2>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  className="bg-neutral-900 border-neutral-800"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
               </div>
-              <div className="text-xs text-gray-600">
-                Password must have:
-                <div className="flex gap-2 mt-1">
-                  <span className={hasMin?"text-green-600":"text-gray-400"}>8+ chars</span>
-                  <span className={hasNum?"text-green-600":"text-gray-400"}>number</span>
-                  <span className={hasUpper?"text-green-600":"text-gray-400"}>uppercase</span>
-                </div>
+              <Button className="w-full bg-white text-black hover:bg-neutral-100">
+                {loading ? <Loader2 className="animate-spin" /> : "Continue"}
+              </Button>
+            </form>
+          )}
+
+          {step === "signin" && (
+            <form onSubmit={handleSignin} className="space-y-5">
+              <h2 className="text-2xl font-medium text-white">Sign in</h2>
+              <p className="text-neutral-400 text-sm mb-3">{email}</p>
+
+              <div className="space-y-2">
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  className="bg-neutral-900 border-neutral-800"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
               </div>
-            </div>
 
-            <Button className="w-full bg-violet-600 hover:bg-violet-700"
-              disabled={strength < 2}
-              onClick={createPassword}>
-              Create Account
-            </Button>
-          </div>
-        )}
+              <Button className="w-full bg-white text-black hover:bg-neutral-100">
+                {loading ? <Loader2 className="animate-spin" /> : "Sign in"}
+              </Button>
+            </form>
+          )}
 
-      </main>
+          {step === "signup" && (
+            <form onSubmit={handleSignup} className="space-y-5">
+              <h2 className="text-2xl font-medium text-white">Create account</h2>
+              <p className="text-neutral-400 text-sm mb-3">{email}</p>
+
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input
+                  className="bg-neutral-900 border-neutral-800"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <Button className="w-full bg-white text-black hover:bg-neutral-100">
+                {loading ? <Loader2 className="animate-spin" /> : "Send OTP"}
+              </Button>
+            </form>
+          )}
+
+          {step === "otp" && (
+            <form onSubmit={handleVerifyOtp} className="space-y-5">
+              <h2 className="text-2xl font-medium text-white">Verify email</h2>
+              <p className="text-neutral-400 text-sm mb-3">
+                Enter the OTP sent to {email}
+              </p>
+
+              <Input
+                className="bg-neutral-900 border-neutral-800"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value)}
+                required
+              />
+
+              <Button className="w-full bg-white text-black hover:bg-neutral-100">
+                {loading ? <Loader2 className="animate-spin" /> : "Verify"}
+              </Button>
+            </form>
+          )}
+
+          {step === "password" && (
+            <form onSubmit={handleCreatePassword} className="space-y-5">
+              <h2 className="text-2xl font-medium text-white">Set password</h2>
+
+              <Input
+                type="password"
+                className="bg-neutral-900 border-neutral-800"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+
+              {/* strength indicator */}
+              <div className="h-1 w-full bg-neutral-800 rounded">
+                <div
+                  className="h-full rounded transition-all"
+                  style={{
+                    width: `${(passwordStrength / 4) * 100}%`,
+                    backgroundColor: strengthColor,
+                  }}
+                />
+              </div>
+              <p className="text-neutral-400 text-sm">{strengthLabel}</p>
+
+              <Button className="w-full bg-white text-black hover:bg-neutral-100">
+                {loading ? <Loader2 className="animate-spin" /> : "Finish"}
+              </Button>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
