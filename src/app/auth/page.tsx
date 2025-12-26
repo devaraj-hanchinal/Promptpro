@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { getAppwriteAccount, ID } from "@/lib/appwrite";
-import { Loader2, Mail, Lock, ArrowRight, User } from "lucide-react";
+import { Loader2, Mail, Lock, ArrowRight, User, Eye, EyeOff } from "lucide-react";
 
 function AuthContent() {
   const router = useRouter();
@@ -23,8 +23,10 @@ function AuthContent() {
   const [password, setPassword] = useState("");
   const [uid, setUid] = useState(""); 
   
+  // UI STATES
   const [userExists, setUserExists] = useState(false);
   const [passStrength, setPassStrength] = useState(0);
+  const [showPassword, setShowPassword] = useState(false); // <--- NEW STATE
 
   // Password Strength Calculator
   useEffect(() => {
@@ -163,10 +165,12 @@ function AuthContent() {
             </span>
           </h1>
           
-          <p className="text-lg text-gray-400 max-w-md">
-            Join 12,000+ creators optimizing their workflows. 
-            Get enterprise-grade prompts, history tracking, and AI-powered refinement.
-          </p>
+          <div className="text-sm text-gray-400 space-y-1">
+            <p>✓ Trusted by thousands</p>
+            <p>✓ Private Incognito Mode</p> {/* <--- ADDED FEATURE */}
+            <p>✓ Premium prompt library</p>
+            <p>✓ Real results within weeks</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-8 relative z-10">
@@ -266,18 +270,35 @@ function AuthContent() {
                 </div>
               )}
 
+              {/* PASSWORD FIELD WITH EYE ICON */}
               <div className="space-y-2">
                 <Label>{userExists ? "Password" : "Create Password"}</Label>
                 <div className="relative">
+                  {/* Lock Icon (Left) */}
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  
                   <Input 
-                    type="password" 
+                    type={showPassword ? "text" : "password"} // <--- TOGGLE TYPE
                     placeholder="••••••••" 
-                    className="pl-10 h-12"
+                    className="pl-10 pr-10 h-12" // Added pr-10 for right icon space
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
+
+                  {/* Eye Toggle Button (Right) */}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
                 </div>
               </div>
 
