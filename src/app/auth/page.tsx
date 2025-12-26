@@ -21,9 +21,10 @@ function AuthContent() {
   const [password, setPassword] = useState("");
   const [uid, setUid] = useState(""); 
   
-  const [userExists, setUserExists] = useState<boolean | null>(null);
+  const [userExists, setUserExists] = useState(false);
   const [passStrength, setPassStrength] = useState(0);
 
+  // Password Strength Calculator
   useEffect(() => {
     let score = 0;
     if (password.length > 7) score += 25;
@@ -33,6 +34,9 @@ function AuthContent() {
     setPassStrength(score);
   }, [password]);
 
+  // ---------------------------------------------------------
+  // STEP 1: SMART EMAIL CHECK (Rate Limit Safe)
+  // ---------------------------------------------------------
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.includes("@")) return;
@@ -41,23 +45,14 @@ function AuthContent() {
     const account = getAppwriteAccount();
 
     try {
-      await account.createEmailPasswordSession(email, "DUMMY_CHECK_123!");
-    } catch (error: any) {
-      if (error?.code === 401 || error?.type === 'general_unauthorized_scope') {
-        setUserExists(true);
-        setStep("password");
-      } else {
-        setUserExists(false);
-        await initiateSignUp(account);
-      }
-    }
-    setIsLoading(false);
-  };
-
-  const initiateSignUp = async (account: any) => {
-    try {
+      // STRATEGY: Try to create a NEW user first.
+      // If they exist, this line throws a specific error (409).
       const newUser = await account.create(ID.unique(), email, "TempPass@123", "User");
       
+      // --- SUCCESS: USER IS NEW ---
+      setUserExists(false);
+      
+      // Send OTP to verify this new account
       const token = await account.createEmailToken({
         userId: newUser.$id,
         email: email
@@ -66,12 +61,30 @@ function AuthContent() {
       setUid(token.userId);
       setStep("otp");
       toast({ title: "Account Created", description: "OTP sent to your email." });
+
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-      setUserExists(null);
+      // --- FAILURE: CHECK IF USER EXISTS ---
+      if (error?.code === 409 || error?.type === 'user_already_exists') {
+        // Error 409 means "Conflict: User already exists"
+        // This is GOOD! It means we just need to log them in.
+        setUserExists(true);
+        setStep("password");
+      } else {
+        // Real Error (e.g. Rate Limit still active from before)
+        console.error(error);
+        toast({ 
+            variant: "destructive", 
+            title: "Access Denied", 
+            description: error.message || "Please wait a moment and try again." 
+        });
+      }
     }
+    setIsLoading(false);
   };
 
+  // ---------------------------------------------------------
+  // STEP 2: VERIFY OTP (Only for New Users)
+  // ---------------------------------------------------------
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -88,6 +101,9 @@ function AuthContent() {
     setIsLoading(false);
   };
 
+  // ---------------------------------------------------------
+  // STEP 3: FINAL LOGIN / PASSWORD SET
+  // ---------------------------------------------------------
   const handleFinalStep = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -95,13 +111,16 @@ function AuthContent() {
 
     try {
       if (userExists) {
+        // --- EXISTING USER: LOGIN ---
         await account.createEmailPasswordSession(email, password);
       } else {
+        // --- NEW USER: SET PASSWORD ---
         if (passStrength < 50) {
             toast({ variant: "destructive", title: "Password too weak" });
             setIsLoading(false);
             return;
         }
+        // We are already logged in via OTP, so just update password
         await account.updatePassword(password);
       }
 
@@ -109,7 +128,8 @@ function AuthContent() {
       toast({ title: "Welcome to Prompt Pro!" });
 
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
+      // Handle "Invalid Credentials" for existing users
+      toast({ variant: "destructive", title: "Login Failed", description: error.message });
     }
     setIsLoading(false);
   };
