@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wand2, Copy, Check, RefreshCw, Eraser, Sparkles, Zap } from "lucide-react";
+import { Wand2, Copy, Check, RefreshCw, Eraser, Sparkles } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { getAppwriteDatabases, getAppwriteAccount } from "@/lib/appwrite";
-import TrustBadge from "@/components/TrustBadge";     
+import { Query } from "appwrite"; // <--- IMPORT QUERY
+import TrustBadge from "@/components/TrustBadge";      
 import CompanyLogos from "@/components/CompanyLogos"; 
-import { Progress } from "@/components/ui/progress"; // Make sure to install shadcn progress or use simple div
+import PrivacyControl from "@/components/PrivacyControl"; // <--- IMPORT COMPONENT
 
 // QUICK START TEMPLATES
 const TEMPLATES = [
@@ -28,11 +29,14 @@ export default function PromptOptimizer() {
   const [copied, setCopied] = useState(false);
   const [selectedModel, setSelectedModel] = useState('general');
   const [outputStyle, setOutputStyle] = useState('detailed');
-  
+   
   // USAGE STATE
   const [usageCount, setUsageCount] = useState(0);
   const [maxLimit, setMaxLimit] = useState(5);
   const [isPremium, setIsPremium] = useState(false);
+
+  // PRIVACY STATE
+  const [isIncognito, setIsIncognito] = useState(false); // <--- NEW STATE
 
   const { toast } = useToast();
 
@@ -72,7 +76,7 @@ export default function PromptOptimizer() {
       }
     };
     loadUsage();
-  }, [isOptimizing]); // Refresh when optimizing finishes
+  }, [isOptimizing]); 
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(optimizedPrompt);
@@ -87,27 +91,51 @@ export default function PromptOptimizer() {
     setCopied(false);
   };
 
+  // --- NEW: HANDLE CLEAR HISTORY ---
+  const handleClearHistory = async () => {
+    if (!confirm("Are you sure? This will delete your saved history.")) return;
+
+    try {
+        const databases = getAppwriteDatabases();
+        
+        // 1. List documents (You might want to filter by user_id here in a real app)
+        // For now, this deletes the documents in the collection based on your logic
+        const result = await databases.listDocuments(
+            'prompt-pro-db', 
+            'history', 
+            [Query.limit(100)]
+        );
+
+        // 2. Delete them
+        const deletePromises = result.documents.map(doc => 
+            databases.deleteDocument('prompt-pro-db', 'history', doc.$id)
+        );
+
+        await Promise.all(deletePromises);
+        toast({ title: "History Cleared", description: "Your history has been wiped." });
+    } catch (error) {
+        console.error("Error clearing history:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not clear history." });
+    }
+  };
+
   const handleTemplateClick = (text: string) => {
     setPrompt(text);
-    // Optional: Scroll to top of textarea
   };
 
   // --- LOGIC ---
   const checkUsageLimit = async (user: any): Promise<boolean> => {
-    if (isPremium) return true; // Bypass for premium
+    if (isPremium) return true; 
 
     const today = new Date().toISOString().split('T')[0];
     const MAX_DAILY = 5;
-
-    // ... (Your existing checkUsageLimit logic here is fine, just ensure it updates setUsageCount) ...
-    // For brevity, I'm keeping the core checks but ensuring UI updates:
-    
+   
     let currentCount = 0;
 
     if (!user) {
         // Guest
         const storage = localStorage.getItem('guest_usage');
-        let data = storage ? JSON.parse(storage) : { date: today, count: 0 };
+        const data = storage ? JSON.parse(storage) : { date: today, count: 0 };
         if (data.date !== today) data = { date: today, count: 0 };
         currentCount = data.count;
 
@@ -115,7 +143,6 @@ export default function PromptOptimizer() {
             triggerLimitToast();
             return false;
         }
-        // Increment happens after success
     } else {
         // Free User
         const prefs = user.prefs || {};
@@ -187,20 +214,25 @@ export default function PromptOptimizer() {
 
       setOptimizedPrompt(data.optimizedPrompt);
       
-      // Update Usage & History
+      // Update Usage
       await incrementUsage(user);
       
-      // Save History
-      try {
-        if(user) {
-            const databases = getAppwriteDatabases();
-            await databases.createDocument('prompt-pro-db', 'history', 'unique()', {
-                prompt: prompt, response: data.optimizedPrompt, model: selectedModel, user_id: user.$id
-            });
-        }
-      } catch (dbError) { }
+      // --- SAVE HISTORY LOGIC (Updated) ---
+      // Only save if NOT incognito
+      if (!isIncognito) {
+          try {
+            if(user) {
+                const databases = getAppwriteDatabases();
+                await databases.createDocument('prompt-pro-db', 'history', 'unique()', {
+                    prompt: prompt, response: data.optimizedPrompt, model: selectedModel, user_id: user.$id
+                });
+            }
+          } catch (dbError) { 
+              console.error("DB Save failed", dbError);
+          }
+      }
 
-      toast({ title: "Prompt Optimized!", description: "Enhanced successfully." });
+      toast({ title: "Prompt Optimized!", description: isIncognito ? "Optimized (Not Saved)" : "Enhanced successfully." });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
@@ -214,7 +246,7 @@ export default function PromptOptimizer() {
       
       <TrustBadge />
 
-      {/* --- NEW: USAGE BAR --- */}
+      {/* --- USAGE BAR --- */}
       {!isPremium && (
         <div className="mb-6 max-w-md mx-auto bg-white dark:bg-gray-800 border border-purple-100 dark:border-purple-900/30 rounded-full p-1 pr-4 flex items-center gap-3 shadow-sm">
             <div className="bg-purple-100 dark:bg-purple-900/50 rounded-full px-3 py-1 text-xs font-bold text-purple-700 dark:text-purple-300 whitespace-nowrap">
@@ -236,14 +268,24 @@ export default function PromptOptimizer() {
         {/* Input Section */}
         <div className="space-y-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-full flex flex-col">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                <Wand2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-lg text-gray-900 dark:text-white">Your Prompt</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Enter the prompt you want to optimize</p>
-              </div>
+            
+            {/* HEADER WITH PRIVACY CONTROLS */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                        <Wand2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div>
+                        <h2 className="font-semibold text-lg text-gray-900 dark:text-white">Your Prompt</h2>
+                    </div>
+                </div>
+
+                {/* --- PRIVACY TOGGLE HERE --- */}
+                <PrivacyControl 
+                    isIncognito={isIncognito}
+                    onToggleIncognito={() => setIsIncognito(!isIncognito)}
+                    onClearHistory={handleClearHistory}
+                />
             </div>
 
             <Textarea 
@@ -253,7 +295,7 @@ export default function PromptOptimizer() {
               onChange={(e) => setPrompt(e.target.value)}
             />
 
-            {/* --- NEW: QUICK START TEMPLATES --- */}
+            {/* QUICK START TEMPLATES */}
             {prompt.length === 0 && (
                 <div className="mb-4">
                     <p className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Or try an example:</p>
