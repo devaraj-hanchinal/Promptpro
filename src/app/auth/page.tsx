@@ -18,7 +18,7 @@ function AuthContent() {
   
   // FORM DATA
   const [email, setEmail] = useState("");
-  const [name, setName] = useState(""); // <--- NEW NAME STATE
+  const [name, setName] = useState(""); 
   const [otpCode, setOtpCode] = useState("");
   const [password, setPassword] = useState("");
   const [uid, setUid] = useState(""); 
@@ -301,4 +301,23 @@ function AuthContent() {
               <Button type="submit" className="w-full h-12 text-base bg-violet-600 hover:bg-violet-700" disabled={isLoading}>
                 {isLoading ? <Loader2 className="animate-spin mr-2" /> : (
                   <span className="flex items-center">
-                    {userExists ? "Sign In" : "Finish Setup
+                    {userExists ? "Sign In" : "Finish Setup"} <ArrowRight className="ml-2 h-4 w-4" />
+                  </span>
+                )}
+              </Button>
+            </form>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
+      <AuthContent />
+    </Suspense>
+  );
+}
