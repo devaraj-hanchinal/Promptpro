@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { getAppwriteAccount, ID } from "@/lib/appwrite";
-import { Loader2, Mail, Lock, ArrowRight } from "lucide-react";
+import { Loader2, Mail, Lock, ArrowRight, User } from "lucide-react";
 
 function AuthContent() {
   const router = useRouter();
@@ -16,7 +16,9 @@ function AuthContent() {
   const [step, setStep] = useState<"email" | "otp" | "password">("email");
   const [isLoading, setIsLoading] = useState(false);
   
+  // FORM DATA
   const [email, setEmail] = useState("");
+  const [name, setName] = useState(""); // <--- NEW NAME STATE
   const [otpCode, setOtpCode] = useState("");
   const [password, setPassword] = useState("");
   const [uid, setUid] = useState(""); 
@@ -35,7 +37,7 @@ function AuthContent() {
   }, [password]);
 
   // ---------------------------------------------------------
-  // STEP 1: CHECK EMAIL (Rate Limit Safe)
+  // STEP 1: CHECK EMAIL
   // ---------------------------------------------------------
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,10 +47,10 @@ function AuthContent() {
     const account = getAppwriteAccount();
 
     try {
-      // STRATEGY: Try to create a NEW user first.
+      // Create user with generic name "User" (we update it later)
       const newUser = await account.create(ID.unique(), email, "TempPass@123", "User");
       
-      // --- SUCCESS: USER IS NEW ---
+      // --- SUCCESS: NEW USER ---
       setUserExists(false);
       
       const token = await account.createEmailToken({
@@ -61,7 +63,7 @@ function AuthContent() {
       toast({ title: "Account Created", description: "OTP sent to your email." });
 
     } catch (error: any) {
-      // --- FAILURE: CHECK IF USER EXISTS ---
+      // --- FAILURE: USER EXISTS ---
       if (error?.code === 409 || error?.type === 'user_already_exists') {
         setUserExists(true);
         setStep("password");
@@ -78,7 +80,7 @@ function AuthContent() {
   };
 
   // ---------------------------------------------------------
-  // STEP 2: VERIFY OTP (Only for New Users)
+  // STEP 2: VERIFY OTP
   // ---------------------------------------------------------
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +99,7 @@ function AuthContent() {
   };
 
   // ---------------------------------------------------------
-  // STEP 3: FINAL LOGIN / PASSWORD SET
+  // STEP 3: FINAL SETUP (Name + Password)
   // ---------------------------------------------------------
   const handleFinalStep = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,10 +108,10 @@ function AuthContent() {
 
     try {
       if (userExists) {
-        // --- EXISTING USER: LOGIN ---
+        // --- EXISTING USER: JUST LOGIN ---
         await account.createEmailPasswordSession(email, password);
       } else {
-        // --- NEW USER: SET PASSWORD ---
+        // --- NEW USER: UPDATE DETAILS ---
         if (passStrength < 50) {
             toast({ variant: "destructive", title: "Password too weak" });
             setIsLoading(false);
@@ -117,12 +119,16 @@ function AuthContent() {
         }
 
         try {
-          // FIX: Pass the 'oldPassword' (TempPass@123) to authorize the change
+          // 1. Update Name (Since we created them as "User" initially)
+          if (name) await account.updateName(name);
+
+          // 2. Update Password (Authorized by the temp password)
           await account.updatePassword(password, "TempPass@123");
         } catch (updateError) {
-          // RECOVERY: If session was lost, re-login with temp pass and try again
+          // Recovery Mechanism
           console.warn("Session lost, recovering...", updateError);
           await account.createEmailPasswordSession(email, "TempPass@123");
+          if (name) await account.updateName(name);
           await account.updatePassword(password, "TempPass@123");
         }
       }
@@ -183,12 +189,12 @@ function AuthContent() {
             <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
               {step === 'email' && "Get started with Prompt Pro"}
               {step === 'otp' && "Check your inbox"}
-              {step === 'password' && (userExists ? "Welcome back" : "Secure your account")}
+              {step === 'password' && (userExists ? "Welcome back" : "Finish your profile")}
             </h2>
             <p className="mt-2 text-sm text-gray-500">
               {step === 'email' && "Enter your email to sign in or create an account."}
               {step === 'otp' && `We sent a temporary code to ${email}`}
-              {step === 'password' && (userExists ? "Enter your password to continue." : "Create a strong password to finish setup.")}
+              {step === 'password' && (userExists ? "Enter your password to continue." : "Set your name and password.")}
             </p>
           </div>
 
@@ -242,6 +248,24 @@ function AuthContent() {
 
           {step === 'password' && (
             <form onSubmit={handleFinalStep} className="space-y-6">
+              
+              {/* NAME FIELD (Only for New Users) */}
+              {!userExists && (
+                <div className="space-y-2 animate-in slide-in-from-top-2">
+                  <Label>Full Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input 
+                      placeholder="John Doe" 
+                      className="pl-10 h-12"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>{userExists ? "Password" : "Create Password"}</Label>
                 <div className="relative">
@@ -277,23 +301,4 @@ function AuthContent() {
               <Button type="submit" className="w-full h-12 text-base bg-violet-600 hover:bg-violet-700" disabled={isLoading}>
                 {isLoading ? <Loader2 className="animate-spin mr-2" /> : (
                   <span className="flex items-center">
-                    {userExists ? "Sign In" : "Finish Setup"} <ArrowRight className="ml-2 h-4 w-4" />
-                  </span>
-                )}
-              </Button>
-            </form>
-          )}
-
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function AuthPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
-      <AuthContent />
-    </Suspense>
-  );
-}
+                    {userExists ? "Sign In" : "Finish Setup
