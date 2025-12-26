@@ -43,20 +43,20 @@ function AuthContent() {
   const [isResendDisabled, setIsResendDisabled] = useState(true);
 
   // ------------------ TIMER EFFECT ------------------
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isResendDisabled && resendTimer > 0) {
-      interval = setInterval(
-        () => setResendTimer((prev) => prev - 1),
-        1000
-      );
-    }
-    if (resendTimer === 0) {
-      setIsResendDisabled(false);
-    }
+  // ------------------ TIMER EFFECT ------------------
+useEffect(() => {
+  let interval: NodeJS.Timeout | undefined;
 
-    return () => interval && clearInterval(interval);
-  }, [isResendDisabled, resendTimer]);
+  if (isResendDisabled && resendTimer > 0) {
+    interval = setInterval(() => {
+      setResendTimer((prev) => prev - 1);
+    }, 1000);
+  }
+
+  return () => {
+    if (interval) clearInterval(interval);
+  };
+}, [isResendDisabled, resendTimer]);
 
   // --------------------------------------------------
   // 🔹 SIGN IN
