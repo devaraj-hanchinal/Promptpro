@@ -109,31 +109,31 @@ function AuthContent() {
   };
 
   // ------------------ SET FINAL PASSWORD -----------------
-  const handlePasswordSet = async (e: any) => {
-    e.preventDefault();
+  // ------------------ SET FINAL PASSWORD -----------------
+const handlePasswordSet = async (e: any) => {
+  e.preventDefault();
 
-    try {
-      if (!hasMin || !hasNum || !hasUpper)
-        throw new Error("Password must be strong (8 chars, 1 number, 1 uppercase)");
+  try {
+    if (!hasMin || !hasNum || !hasUpper)
+      throw new Error("Password must be strong (8 chars, 1 number, 1 uppercase)");
 
-      await account.updatePassword(password);
+    await account.updatePassword(password);
 
-      const savedName = localStorage.getItem("temp_name");
-      const savedEmail = localStorage.getItem("temp_email");
+    const savedName = localStorage.getItem("temp_name");
 
-      if (savedName) await account.updateName(savedName);
-      if (savedEmail) await account.updateEmail(savedEmail);
+    // ✨ keep ONLY name update — email doesn't need updating
+    if (savedName) await account.updateName(savedName);
 
-      localStorage.removeItem("otp_uid");
-      localStorage.removeItem("temp_name");
-      localStorage.removeItem("temp_email");
+    localStorage.removeItem("otp_uid");
+    localStorage.removeItem("temp_name");
+    localStorage.removeItem("temp_email");
 
-      toast({ title: "Account Ready!", description: "Welcome to Prompt Pro" });
-      window.location.href = "/";
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
-    }
-  };
+    toast({ title: "Account Ready!", description: "Welcome to Prompt Pro" });
+    window.location.href = "/";
+  } catch (err: any) {
+    toast({ variant: "destructive", title: "Error", description: err.message });
+  }
+};
 
   // -------------------------------------------------------
   // ------------------------- UI --------------------------
