@@ -45,45 +45,84 @@ function AuthContent() {
 
     setIsLoading(true);
     const account = getAppwriteAccount();
+    
+    // 1. Check if already logged in
     try {
       await account.get();
-      // if logged in already
       router.push("/");
+      return; 
     } catch {}
 
+    // 2. Check if user exists (by trying to make a session)
     try {
-      await account.createEmailPasswordSession(email, "invalid");
-    } catch {
-      try {
-        const existsTest = await account.createEmailPasswordSession(email, "invalid2");
-        console.log(existsTest);
-      } catch (err: any) {
-        if (err?.code === 401) setUserExists(true);
-        else setUserExists(false);
+      // Try to create a dummy session to check if account exists
+      // We use a dummy password. If error is 401 (Unauthorized), user exists. 
+      // If error is 404 (Not Found), user does not exist.
+      await account.createEmailPasswordSession(email, "CheckExists123!");
+    } catch (err: any) {
+      // Appwrite throws 401 if password wrong (User Exists)
+      // Appwrite throws 404 (or similar) if user not found
+      if (err?.code === 401 || err?.type === 'general_unauthorized_scope') {
+         setUserExists(true);
+      } else {
+         setUserExists(false);
       }
     }
 
     setIsLoading(false);
 
-    if (userExists === null) return;
-
-    if (userExists) {
-      // SIGN IN → ask for password
-      setStep("password");
-    } else {
-      // SIGN UP → ask for name then send OTP
-      setStep("otp");
-      try {
-        const account = getAppwriteAccount();
-        await account.create(ID.unique(), email, "TempPass@123", name || "User");
-        const tok = await account.createEmailToken(email);
-        setUid(tok.userId);
-        toast({ title: "OTP Sent!", description: "Check your email inbox." });
-      } catch {
-        toast({ variant: "destructive", title: "Error creating account" });
-      }
-    }
+    // Wait for state to update, but we can use local logic here
+    // (Note: relying on state update inside same function is risky, so we branch logic)
+    
+    // LOGIC BRANCH:
+    // We re-evaluate the try/catch result logic directly here for safety
+    // or use a separate effect. But for simplicity, let's assume we proceed 
+    // based on what we just found. 
+    
+    // NOTE: Since setUserExists is async, we will split logic in a cleaner way:
+    // We will assume "User Exists" if we got the 401 error.
   };
+
+  // Re-run this logic when userExists updates
+  useEffect(() => {
+    if (userExists === null) return;
+    if (isLoading) return; // Wait until loading finishes
+
+    const processStep = async () => {
+      if (userExists) {
+        // SIGN IN → ask for password
+        setStep("password");
+      } else {
+        // SIGN UP → ask for name then send OTP
+        setIsLoading(true);
+        try {
+          const account = getAppwriteAccount();
+          
+          // A. Create User
+          // We must Capture the user object to get the ID
+          const newUser = await account.create(ID.unique(), email, "TempPass@123", name || "User");
+          
+          // B. Create OTP Token
+          // FIX: Pass OBJECT { userId, email } as required by your SDK
+          const tok = await account.createEmailToken({
+            userId: newUser.$id,
+            email: email
+          });
+
+          setUid(tok.userId);
+          setStep("otp");
+          toast({ title: "OTP Sent!", description: "Check your email inbox." });
+        } catch (error: any) {
+          console.error(error);
+          toast({ variant: "destructive", title: "Error", description: error.message });
+          setUserExists(null); // Reset to try again
+        }
+        setIsLoading(false);
+      }
+    };
+    processStep();
+  }, [userExists]);
+
 
   /* --------------------- STEP 2: VERIFY OTP ---------------------- */
   const handleVerifyOtp = async (e: React.FormEvent) => {
@@ -93,10 +132,15 @@ function AuthContent() {
     setIsLoading(true);
     try {
       const account = getAppwriteAccount();
-      await account.createSession(uid, otpCode); // <- correct OTP verification
+      // FIX: Standardize usage of createSession for OTP
+      await account.createSession(uid, otpCode); 
+      
+      // If successful, they are logged in. 
+      // Now let them set a permanent password.
       setStep("password");
-    } catch {
-      toast({ variant: "destructive", title: "Invalid OTP" });
+      toast({ title: "Verified", description: "Please set your password." });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Invalid OTP", description: "Please try again." });
     }
     setIsLoading(false);
   };
@@ -104,23 +148,39 @@ function AuthContent() {
   /* --------------------- STEP 3: SET PASSWORD ---------------------- */
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // If user existed (Login flow), we just try to login
+    if (userExists) {
+        setIsLoading(true);
+        try {
+            const account = getAppwriteAccount();
+            await account.createEmailPasswordSession(email, password);
+            router.push("/");
+        } catch (error) {
+            toast({ variant: "destructive", title: "Wrong Password" });
+        }
+        setIsLoading(false);
+        return;
+    }
+
+    // If New User (SignUp flow), we update the temp password
     if (progress < 50) return toast({ title: "Weak Password", description: "Add more complexity." });
 
     setIsLoading(true);
     try {
       const account = getAppwriteAccount();
       await account.updatePassword(password);
-      await account.createEmailPasswordSession(email, password);
+      // We are already logged in from the OTP step, so just redirect
       router.push("/");
     } catch (err) {
-      toast({ variant: "destructive", title: "Error creating password" });
+      toast({ variant: "destructive", title: "Error saving password" });
     }
     setIsLoading(false);
   };
 
   /* --------------------------------------------------
                       UI
-  ---------------------------------------------------*/
+   ---------------------------------------------------*/
   return (
     <div className="min-h-screen flex bg-white dark:bg-gray-900">
 
@@ -130,134 +190,7 @@ function AuthContent() {
           <h1 className="text-5xl font-bold leading-snug">
             Level up your
             <br />
-            <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Prompting Skills.
-            </span>
-          </h1>
-          <p className="mt-4 text-gray-300 max-w-md">
-            Unlock advanced AI content creation workflows, boost productivity, and automate your creativity.
-          </p>
-        </div>
-
-        <div className="text-sm text-gray-400 space-y-1">
-          <p>✓ Trusted by thousands</p>
-          <p>✓ Premium prompt library</p>
-          <p>✓ Real results within weeks</p>
-        </div>
-      </div>
-
-      {/* -- RIGHT SPLIT / FORM -- */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-10">
-        <div className="w-full max-w-md space-y-8">
-
-          {/* --------------------- EMAIL STEP --------------------- */}
-          {step === "email" && (
-            <form onSubmit={handleEmailCheck} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Email address</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <Input
-                    className="pl-10 h-11"
-                    required
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <Button className="w-full h-11" disabled={isLoading}>
-                {isLoading ? <Loader2 className="animate-spin mr-2" /> : "Continue"}
-              </Button>
-            </form>
-          )}
-
-          {/* --------------------- OTP STEP --------------------- */}
-          {step === "otp" && (
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-
-              <div className="space-y-2">
-                <Label>Full Name</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <Input
-                    className="pl-10 h-11"
-                    placeholder="Your name"
-                    value={name}
-                    required
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Enter OTP sent to {email}</Label>
-                <div className="relative">
-                  <Input
-                    className="h-11"
-                    value={otpCode}
-                    placeholder="123456"
-                    required
-                    onChange={(e) => setOtpCode(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <Button className="w-full h-11" disabled={isLoading}>
-                {isLoading ? <Loader2 className="animate-spin mr-2" /> : "Verify OTP"}
-              </Button>
-
-            </form>
-          )}
-
-          {/* --------------------- PASSWORD STEP --------------------- */}
-          {step === "password" && (
-            <form onSubmit={handleSetPassword} className="space-y-5">
-              <div className="space-y-2">
-                <Label>Create password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <Input
-                    type="password"
-                    className="pl-10 h-11"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Strength bar */}
-              <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${progress}%`,
-                    background:
-                      progress < 50 ? "red" : progress < 75 ? "orange" : "green",
-                  }}
-                />
-              </div>
-
-              <Button className="w-full h-11" disabled={isLoading}>
-                {isLoading ? <Loader2 className="animate-spin mr-2" /> : "Finish & Log In"}
-              </Button>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function AuthPage() {
-  return (
-    <Suspense fallback={<div className="flex justify-center items-center min-h-screen"><Loader2 className="animate-spin" /></div>}>
-      <AuthContent />
-    </Suspense>
-  );
-}
+            <span className="bg-gradient-to-r from-purple-400 to-pink-400
 
 
 
