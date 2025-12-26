@@ -35,7 +35,7 @@ function AuthContent() {
   }, [password]);
 
   // ---------------------------------------------------------
-  // STEP 1: SMART EMAIL CHECK (Rate Limit Safe)
+  // STEP 1: CHECK EMAIL (Rate Limit Safe)
   // ---------------------------------------------------------
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,13 +46,11 @@ function AuthContent() {
 
     try {
       // STRATEGY: Try to create a NEW user first.
-      // If they exist, this line throws a specific error (409).
       const newUser = await account.create(ID.unique(), email, "TempPass@123", "User");
       
       // --- SUCCESS: USER IS NEW ---
       setUserExists(false);
       
-      // Send OTP to verify this new account
       const token = await account.createEmailToken({
         userId: newUser.$id,
         email: email
@@ -65,12 +63,9 @@ function AuthContent() {
     } catch (error: any) {
       // --- FAILURE: CHECK IF USER EXISTS ---
       if (error?.code === 409 || error?.type === 'user_already_exists') {
-        // Error 409 means "Conflict: User already exists"
-        // This is GOOD! It means we just need to log them in.
         setUserExists(true);
         setStep("password");
       } else {
-        // Real Error (e.g. Rate Limit still active from before)
         console.error(error);
         toast({ 
             variant: "destructive", 
@@ -120,15 +115,22 @@ function AuthContent() {
             setIsLoading(false);
             return;
         }
-        // We are already logged in via OTP, so just update password
-        await account.updatePassword(password);
+
+        try {
+          // FIX: Pass the 'oldPassword' (TempPass@123) to authorize the change
+          await account.updatePassword(password, "TempPass@123");
+        } catch (updateError) {
+          // RECOVERY: If session was lost, re-login with temp pass and try again
+          console.warn("Session lost, recovering...", updateError);
+          await account.createEmailPasswordSession(email, "TempPass@123");
+          await account.updatePassword(password, "TempPass@123");
+        }
       }
 
       router.push("/");
       toast({ title: "Welcome to Prompt Pro!" });
 
     } catch (error: any) {
-      // Handle "Invalid Credentials" for existing users
       toast({ variant: "destructive", title: "Login Failed", description: error.message });
     }
     setIsLoading(false);
