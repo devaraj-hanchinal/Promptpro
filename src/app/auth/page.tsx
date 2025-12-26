@@ -72,6 +72,7 @@ function AuthContent() {
   const initiateSignUp = async (account: any) => {
     try {
       // A. Create the User Account first
+      // We use a temp password which we will replace in the final step
       const newUser = await account.create(ID.unique(), email, "TempPass@123", "User");
       
       // B. Send OTP to that user
@@ -243,77 +244,4 @@ function AuthContent() {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full h-12 text-base" disabled={isLoading}>
-                {isLoading ? <Loader2 className="animate-spin mr-2" /> : "Verify Code"}
-              </Button>
-              <button 
-                type="button"
-                onClick={() => setStep('email')}
-                className="w-full text-sm text-gray-500 hover:text-gray-900 mt-4"
-              >
-                Change email address
-              </button>
-            </form>
-          )}
-
-          {/* --- FORM STEP 3: PASSWORD (Both) --- */}
-          {step === 'password' && (
-            <form onSubmit={handleFinalStep} className="space-y-6">
-              <div className="space-y-2">
-                <Label>{userExists ? "Password" : "Create Password"}</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input 
-                    type="password" 
-                    placeholder="••••••••" 
-                    className="pl-10 h-12"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Strength Meter (Only for New Users) */}
-              {!userExists && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Password strength</span>
-                    <span>{passStrength < 50 ? "Weak" : passStrength < 75 ? "Good" : "Strong"}</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full transition-all duration-500 ${
-                        passStrength < 50 ? "bg-red-500" : passStrength < 75 ? "bg-yellow-500" : "bg-green-500"
-                      }`}
-                      style={{ width: `${passStrength}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <Button type="submit" className="w-full h-12 text-base bg-violet-600 hover:bg-violet-700" disabled={isLoading}>
-                {isLoading ? <Loader2 className="animate-spin mr-2" /> : (
-                  <span className="flex items-center">
-                    {userExists ? "Sign In" : "Finish Setup"} <ArrowRight className="ml-2 h-4 w-4" />
-                  </span>
-                )}
-              </Button>
-            </form>
-          )}
-
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function AuthPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
-      <AuthContent />
-    </Suspense>
-  );
-}
-
-
+              <Button type="submit" className="
