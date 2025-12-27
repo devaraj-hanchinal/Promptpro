@@ -1,33 +1,28 @@
-"use client";
-
-import Header from "@/components/Header";
-import Hero from "@/components/Hero";
+import { Suspense } from "react";
 import PromptOptimizer from "@/components/PromptOptimizer";
-import Features from "@/components/Features";
-import Pricing from "@/components/Pricing";
-import FAQ from "@/components/FAQ";
-import CTA from "@/components/CTA";
+import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { Loader2 } from "lucide-react";
 
-export default function Page() {
+export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header />
-      <main className="flex-1">
-        <Hero />
-        
-        <div id="optimizer">
+    <main className="flex min-h-screen flex-col bg-white dark:bg-[#020817]">
+      <Navbar />
+      
+      <div className="flex-grow pt-24 pb-12 px-4">
+        {/* The Suspense boundary fixes the build error */}
+        <Suspense 
+          fallback={
+            <div className="flex items-center justify-center w-full h-96">
+              <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
+            </div>
+          }
+        >
           <PromptOptimizer />
-        </div>
+        </Suspense>
+      </div>
 
-        {/* The HistoryList component has been moved to /history/page.tsx */}
-
-        <Features />
-        <Pricing />
-        <FAQ />
-        <CTA />
-      </main>
       <Footer />
-    </div>
+    </main>
   );
 }
