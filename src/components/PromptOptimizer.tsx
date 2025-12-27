@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from "next/navigation"; 
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,7 +40,6 @@ export default function PromptOptimizer() {
   const [isIncognito, setIsIncognito] = useState(false); 
 
   const { toast } = useToast();
-  const searchParams = useSearchParams(); 
 
   // 1. FETCH USAGE ON LOAD
   useEffect(() => {
@@ -81,18 +79,6 @@ export default function PromptOptimizer() {
     loadUsage();
   }, [isOptimizing]); 
 
-  // 2. CHECK FOR URL PARAMS (CHROME EXTENSION)
-  useEffect(() => {
-    const incomingPrompt = searchParams.get("prompt");
-    if (incomingPrompt) {
-      setPrompt(incomingPrompt);
-      // Auto-scroll to input
-      const textarea = document.querySelector('textarea');
-      if (textarea) textarea.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [searchParams]);
-
-
   const handleCopy = async () => {
     await navigator.clipboard.writeText(optimizedPrompt);
     setCopied(true);
@@ -115,8 +101,8 @@ export default function PromptOptimizer() {
         
         // 1. List documents
         const result = await databases.listDocuments(
-            'database-prompt-pro-db', // Ensure this ID matches your database ID
-            'table-history',          // Ensure this ID matches your collection ID
+            'database-prompt-pro-db', // Check your ID
+            'table-history',          // Check your ID
             [Query.limit(100)]
         );
 
@@ -221,14 +207,14 @@ export default function PromptOptimizer() {
 
       setIsOptimizing(true);
       
-      // Sending 'outputStyle' now instead of just 'style' string to match your API
+      // Sending 'outputStyle' mapping
       let styleLabel = "";
       if(outputStyle === "detailed") styleLabel = "Detailed & Comprehensive";
       if(outputStyle === "concise") styleLabel = "Concise & Direct";
       if(outputStyle === "creative") styleLabel = "Creative & Engaging";
       if(outputStyle === "technical") styleLabel = "Technical & Precise";
 
-      // Sending 'model' label
+      // Sending 'model' mapping
       let modelLabel = "";
       if(selectedModel === "gemini") modelLabel = "Google Gemini";
       if(selectedModel === "gpt4") modelLabel = "GPT-4 / ChatGPT";
@@ -250,14 +236,13 @@ export default function PromptOptimizer() {
       await incrementUsage(user);
       
       // --- SAVE HISTORY LOGIC ---
-      // Only save if NOT incognito
       if (!isIncognito) {
           try {
             if(user) {
                 const databases = getAppwriteDatabases();
                 await databases.createDocument(
-                    'database-prompt-pro-db', // Ensure this ID matches your database ID
-                    'table-history',          // Ensure this ID matches your collection ID
+                    'database-prompt-pro-db', // Check your ID
+                    'table-history',          // Check your ID
                     'unique()', 
                     {
                       prompt: prompt, 
@@ -320,7 +305,7 @@ export default function PromptOptimizer() {
                     </div>
                 </div>
 
-                {/* --- PRIVACY TOGGLE HERE --- */}
+                {/* --- PRIVACY TOGGLE --- */}
                 <PrivacyControl 
                     isIncognito={isIncognito}
                     onToggleIncognito={() => setIsIncognito(!isIncognito)}
