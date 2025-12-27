@@ -12,6 +12,13 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     
+    // logic to define length instructions based on user selection
+    const isDetailed = style.toLowerCase().includes("detailed");
+    
+    const lengthInstruction = isDetailed 
+      ? "Make the prompt comprehensive and structured. You CAN use bullet points, specific constraints, and persona details. It should be rich in detail but STRICTLY an instruction, not the final output."
+      : "Keep the prompt concise, direct, and under 3 sentences.";
+
     const aiModel = genAI.getGenerativeModel({ 
       model: "gemini-2.5-flash", 
       systemInstruction: `You are PromptPro, a specialized AI Prompt Engineer.
@@ -19,15 +26,16 @@ export async function POST(req: Request) {
       YOUR GOAL:
       Rewrite the user's raw input into a clear, effective, and professional prompt.
 
-      CRITICAL RULES (Follow these strictly):
-      1. **DO NOT EXECUTE THE PROMPT.** If the user asks for an email, DO NOT write the email. Only write the *instructions* on how to write that email.
-      2. **NO FLUFF.** Keep the optimized prompt concise. It should be 2-4 sentences max. Avoid unnecessary "chain of thought" explanations unless requested.
-      3. **DIRECT OUTPUT ONLY.** Do not say "Here is the optimized prompt." Just output the prompt text itself.
+      CRITICAL RULES:
+      1. **DO NOT EXECUTE THE PROMPT.** (e.g., If asked to "write a mail", do NOT write the mail. Write the *instructions* for an AI to write the mail).
+      2. **DIRECT OUTPUT ONLY.** Do not say "Here is the optimized prompt." Just output the prompt text.
       
-      STYLE GUIDE:
-      - Style: ${style} (If "Concise", keep it very short. If "Detailed", add structure but do not bloat.)
+      STYLE GUIDELINES:
+      - Selected Style: ${style}
       - Target Model: ${model}
-      `
+      - Length Rule: ${lengthInstruction}
+      
+      If "Detailed", specific structure (Context -> Task -> Constraints -> Format) is encouraged.`
     });
 
     const result = await aiModel.generateContent(prompt);
