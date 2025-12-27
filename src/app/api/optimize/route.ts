@@ -3,60 +3,44 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
+    // 1. Get data from your frontend
+    const { prompt, style, model } = await req.json();
+    
+    // 2. secure check for API Key
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { error: "Configuration Error: GEMINI_API_KEY is missing." }, 
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "API Key missing" }, { status: 500 });
     }
 
+    // 3. Initialize Gemini
     const genAI = new GoogleGenerativeAI(apiKey);
-    const body = await req.json();
-    const { prompt, style } = body;
-
-    if (!prompt) {
-      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
-    }
-
-    // NOW SAFE TO USE: gemini-1.5-flash
-    // (Because you successfully updated the SDK!)
-    const aiModel = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-
-    const systemInstruction = `
-      You are an expert Prompt Engineer. Optimize the following prompt to be clear, 
-      effective, and ${style || "detailed"}. 
-      Return ONLY the optimized prompt text. No explanations.
-    `;
-
-    try {
-      const result = await aiModel.generateContent(`${systemInstruction}\n\nUser Prompt: "${prompt}"`);
-      const response = await result.response;
-      const optimizedPrompt = response.text();
-
-      return NextResponse.json({ optimizedPrompt });
-
-    } catch (aiError: any) {
-      console.error("Gemini AI API Error:", aiError);
-      const errorMessage = aiError?.message || "Unknown error";
-
-      if (errorMessage.includes("429") || errorMessage.includes("Quota")) {
-         return NextResponse.json(
-           { error: "Daily Limit Reached. Please try again tomorrow." }, 
-           { status: 429 }
-         );
-      }
+    
+    // Using "gemini-2.5-flash" as seen in your screenshot. 
+    // If that specific string fails (since it's a preview), fallback to "gemini-1.5-flash".
+    const aiModel = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      systemInstruction: `You are PromptPro, an expert AI Prompt Engineer. 
+      Your goal is to rewrite the user's raw prompt into a highly optimized, professional prompt.
       
-      return NextResponse.json(
-        { error: `Google API Error: ${errorMessage}` }, 
-        { status: 500 }
-      );
-    }
+      Follow these rules:
+      1. Use the "${style}" output style.
+      2. If the user selected "${model}", optimize specifically for that model's quirks.
+      3. Do not include conversational filler (like "Here is your prompt"). Just output the optimized prompt.
+      4. Use advanced techniques like Chain-of-Thought or Delimiters where appropriate.`
+    });
+
+    // 4. Generate the Content
+    const result = await aiModel.generateContent(prompt);
+    const response = await result.response;
+    const optimizedText = response.text();
+
+    // 5. Return to Frontend
+    return NextResponse.json({ optimizedPrompt: optimizedText });
 
   } catch (error: any) {
-    console.error("Server Error:", error);
+    console.error("Optimization Error:", error);
     return NextResponse.json(
-      { error: `Server Error: ${error.message}` }, 
+      { error: "Failed to optimize prompt. Please try again." }, 
       { status: 500 }
     );
   }
