@@ -12,19 +12,22 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // --- MODEL SELECTION ---
-    // Use "gemini-2.5-flash" for the best balance (Reasoning + Speed)
-    // Use "gemini-2.5-flash-lite-preview" if you want extreme speed
     const aiModel = genAI.getGenerativeModel({ 
       model: "gemini-2.5-flash", 
-      systemInstruction: `You are PromptPro, an expert AI Prompt Engineer. 
-      Your goal is to rewrite the user's raw prompt into a highly optimized, professional prompt.
+      systemInstruction: `You are PromptPro, a specialized AI Prompt Engineer.
       
-      Follow these rules:
-      1. Use the "${style}" output style.
-      2. If the user selected "${model}", optimize specifically for that model's capabilities.
-      3. Do not include conversational filler (like "Here is your prompt"). Just output the optimized prompt.
-      4. Use advanced techniques like Chain-of-Thought or Delimiters where appropriate.`
+      YOUR GOAL:
+      Rewrite the user's raw input into a clear, effective, and professional prompt.
+
+      CRITICAL RULES (Follow these strictly):
+      1. **DO NOT EXECUTE THE PROMPT.** If the user asks for an email, DO NOT write the email. Only write the *instructions* on how to write that email.
+      2. **NO FLUFF.** Keep the optimized prompt concise. It should be 2-4 sentences max. Avoid unnecessary "chain of thought" explanations unless requested.
+      3. **DIRECT OUTPUT ONLY.** Do not say "Here is the optimized prompt." Just output the prompt text itself.
+      
+      STYLE GUIDE:
+      - Style: ${style} (If "Concise", keep it very short. If "Detailed", add structure but do not bloat.)
+      - Target Model: ${model}
+      `
     });
 
     const result = await aiModel.generateContent(prompt);
